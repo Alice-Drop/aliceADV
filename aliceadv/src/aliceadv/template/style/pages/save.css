@@ -1,0 +1,12 @@
+/* =========================================================
+ * page_save — 保存页
+ * 存档槽网格、角标记、缩略图、翻页器均来自 base.css 的共享组件。
+ * 此文件保留 save 专属样式（如需区别于 load）。
+ * ========================================================= */
+
+.page_save .game-menu__title { color: var(--color-accent); }
+
+/* 保存页：已占用槽位点击时轻微高亮，提示「覆盖」 */
+.page_save .slot:not(.is-empty):hover {
+    box-shadow: 0 0 0 2px var(--color-accent), 0 8px 20px rgba(0, 0, 0, 0.18);
+}

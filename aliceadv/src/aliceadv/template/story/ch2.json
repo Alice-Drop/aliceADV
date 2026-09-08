@@ -1,0 +1,22 @@
+{
+    "_comment": "第二章示例剧本（日常）。位于 story/ 下。演示背景切换、立绘左右站位与音量控制。背景位于 images/bg/，音乐位于 audio/。",
+
+    "id": "ch2",
+    "title": "日常 · 教室的午后",
+    "start": "seg_start",
+
+    "segments": {
+        "seg_start": [
+            { "cmd": "bg", "src": "images/bg/classroom.png", "transition": "fade" },
+            { "cmd": "music", "src": "audio/rooftop.wav", "volume": 0.35, "fade": 1 },
+            { "cmd": "title", "text": "日常 · 教室的午后" },
+            { "cmd": "narrate", "text": "第二天的午休，教室里只剩下翻书的声音。" },
+            { "cmd": "show", "char": "elin", "sprite": "smile", "at": "right", "anim": "slide-left" },
+            { "cmd": "say", "char": "elin", "sprite": "smile", "text": "早上好！昨天说的约定，还记得吧？" },
+            { "cmd": "say", "char": "protagonist", "text": "天台，放学后。忘不了。" },
+            { "cmd": "say", "char": "elin", "sprite": "surprise", "text": "记得这么清楚……你今天很反常哦？" },
+            { "cmd": "narrate", "text": "（本章节为演示剧本，剧情到此为止。）" },
+            { "cmd": "end", "action": "chapters" }
+        ]
+    }
+}

@@ -1,0 +1,199 @@
+{
+    "_comment": "aliceADV 用户配置。所有尺寸/位置均为相对值(0~1)，相对于 screen 的目标高宽，构建时翻译为百分比。这是用户自定义内容，模板(core/)不会写死默认。",
+    "screen": {
+        "aspect": "16:9",
+        "designWidth": 1920,
+        "designHeight": 1080,
+        "overflowColor": "#0d0d10"
+    },
+    "fonts": {
+        "text": "\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", \"Source Han Sans SC\", sans-serif",
+        "interface": "\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", \"Source Han Sans SC\", sans-serif",
+        "title": "\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", \"Source Han Sans SC\", sans-serif",
+        "system": "system-ui, -apple-system, \"PingFang SC\", \"Microsoft YaHei\", sans-serif"
+    },
+    "colors": {
+        "accent":      "#3B5998",
+        "accentDeep":  "#1F3A78",
+        "idle":        "#5C5757",
+        "idleSmall":   "#7A7575",
+        "hover":       "#3284D6",
+        "selected":    "#3B5998",
+        "insensitive": "#888888",
+        "text":        "#402000",
+        "interface":   "#404040",
+        "paper":       "#FAF8F0",
+        "paperDeep":   "#E8E2D0",
+        "muted":       "#6080D0",
+        "hoverMuted":  "#8080F0"
+    },
+    "sizes": {
+        "text":          22,
+        "name":          28,
+        "interface":     22,
+        "label":         28,
+        "notify":        18,
+        "title":         56,
+        "choice":        24,
+        "slot":          18,
+        "pageHeading":   56,
+        "sectionHeading":28
+    },
+    "frame": {
+        "borders":        [15, 15, 15, 15],
+        "confirmBorders": [60, 60, 60, 60],
+        "tile":           false
+    },
+    "button": {
+        "borders":     [10, 10, 10, 10],
+        "tile":        true,
+        "textIdle":    "#5C5757",
+        "textHover":   "#3284D6",
+        "textSelected":"#3B5998",
+        "width":       null,
+        "height":      64
+    },
+    "choice": {
+        "borders":    [10, 10, 10, 10],
+        "idleColor":  "#5C5757",
+        "hoverColor": "#3284D6"
+    },
+    "slot": {
+        "width":  414,
+        "height": 309,
+        "borders":[15, 15, 15, 15],
+        "cols":   3,
+        "rows":   2
+    },
+    "thumb": {
+        "width":  384,
+        "height": 216
+    },
+    "slider": {
+        "size":     64,
+        "tile":     true,
+        "borders":  [6, 6, 6, 6]
+    },
+    "scrollbar": {
+        "size":     24,
+        "tile":     true,
+        "borders":  [6, 10, 6, 10],
+        "unscrollable": "hide"
+    },
+
+    "layout": {
+        "dialogue": {
+            "_comment": "height 为相对屏幕高(0~1)，构建翻译为百分比；.textbox 为 border-box，padding 计入 height。padTop/padBottom 可单独指定正文上下留白（缺省回落 padY），对应 Ren'Py dialogue_ypos；舞台是固定 1920x1080 设计画布，可直接写设计像素如 75px。",
+            "left":   0.05,
+            "bottom": 0.05,
+            "width":  0.90,
+            "height": 0.28,
+            "padX":   "3.4em",
+            "padY":   "2.4em",
+            "padTop": "2.4em",
+            "padBottom": "2.4em",
+            "justify": "center"
+        },
+        "name": {
+            "left": 0.03,
+            "top":  -0.07
+        },
+        "sprite": {
+            "bottom": 0.00,
+            "height": "auto"
+        },
+        "nvl": {
+            "left": 0.1875,
+            "width": 0.625,
+            "lineGap": "0.5em",
+            "justify": "center",
+            "textAlign": "left"
+        },
+        "choice": {
+            "left":     0.10,
+            "top":      0.26,
+            "width":    0.80,
+            "gap":      "1.2em",
+            "maxWidth": "60%"
+        },
+        "toolbar": {
+            "height": "6.5em",
+            "gap":    "2em"
+        }
+    },
+
+    "panel": {
+        "_comment": "游戏内浮层面板（菜单/侧栏）停靠方向。left=左侧栏，right=右侧栏。构建时转换为 .ingame-menu 的 CSS 定位。",
+        "side": "right"
+    },
+
+    "notifyYpos": 68,
+    "skipYpos": 15,
+
+    "info": {
+        "name":           "Example Game",
+        "version":        "1.0.0",
+        "engine":         "aliceADV-v0.1"
+    },
+    "about": "本程序使用了由若干许可证授权的免费软件。\naliceADV 是一个参考 Ren'Py 设计语言的 ADV 游戏引擎示例。",
+
+    "sidebar": [
+        "history", "save", "load", "settings",
+        "chapters", "gallery", "branches", "about", "back"
+    ],
+
+    "pages": {
+        "title": {
+            "layout": "left",
+            "background": "gui/main_menu.png",
+            "showName":   true,
+            "showVersion":true,
+            "buttons": [
+                "start", "load", "settings", "chapters", "gallery", "branches", "about", "quit"
+            ]
+        },
+        "save": {
+            "background": "gui/game_menu.png",
+            "title":      "保存",
+            "titleEn":    "Save",
+            "slotRows":   2,
+            "slotCols":   3,
+            "autoSlots":  9
+        },
+        "load": {
+            "background": "gui/game_menu.png",
+            "title":      "读档",
+            "titleEn":    "Load",
+            "slotRows":   2,
+            "slotCols":   3
+        },
+        "settings": {
+            "background": "gui/game_menu.png",
+            "title":      "设置",
+            "titleEn":    "Preferences"
+        },
+        "chapters": {
+            "background": "gui/game_menu.png",
+            "title":      "章节选择",
+            "titleEn":    "Chapters"
+        },
+        "branches": {
+            "background": "gui/game_menu.png",
+            "title":      "剧情分支",
+            "titleEn":    "Branches"
+        },
+        "stage": {
+            "background": "images/bg/roof.png",
+            "toolbar":    ["back", "history", "skip", "auto", "save", "qsave", "qload", "menu"]
+        },
+        "gallery": {
+            "background": "gui/game_menu.png",
+            "title":      "画廊",
+            "titleEn":    "Gallery",
+            "cols":       4
+        },
+        "about": {
+            "background": "gui/main_menu.png"
+        }
+    }
+}

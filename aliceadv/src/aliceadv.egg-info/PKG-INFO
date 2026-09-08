@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: aliceadv
+Version: 0.1.0
+Summary: aliceADV - Ren'Py 设计语言的网页 ADV 游戏引擎：工程模板 + 创建/构建编译器
+Requires-Python: >=3.9

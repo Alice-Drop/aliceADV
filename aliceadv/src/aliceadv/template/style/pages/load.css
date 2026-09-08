@@ -1,0 +1,14 @@
+/* =========================================================
+ * page_load — 读档页
+ * 与 save 共用 base.css 的存档槽组件。
+ * 读档页中「空槽」不可点，通过禁用态弱化。
+ * ========================================================= */
+
+.page_load .game-menu__title { color: var(--color-accent); }
+
+/* 空槽在读档页中表现为不可选（引擎层面也拦截点击） */
+.page_load .slot.is-empty {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+.page_load .slot.is-empty:hover { transform: none; box-shadow: none; }

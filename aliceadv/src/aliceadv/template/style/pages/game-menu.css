@@ -1,0 +1,76 @@
+/* =========================================================
+ * 游戏内菜单页通用外壳
+ * save / load / settings / chapters / branches / gallery / about
+ * 共用这套「侧边栏 + 主区」双栏布局。
+ * ========================================================= */
+
+.game-menu {
+    display: grid;
+    grid-template-columns: 22% 1fr;
+    height: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+/* 侧边栏：竖向按钮列表 + 返回按钮 */
+.game-menu__sidebar {
+    position: relative;
+    padding: calc(var(--design-h) * 80 / 1080) calc(var(--design-w) * 30 / 1920) calc(var(--design-h) * 30 / 1080) calc(var(--design-w) * 50 / 1920);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--design-h) * 10 / 1080);
+    z-index: 3;
+}
+.game-menu__sidebar .paper-btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: calc(var(--design-w) * 28 / 1920);
+    font-size: var(--size-interface);
+}
+.game-menu__sidebar .back-btn {
+    margin-top: auto;
+    color: var(--color-accent);
+}
+
+/* 主区：标题 + 主体内容 */
+.game-menu__main {
+    position: relative;
+    padding: calc(var(--design-h) * 80 / 1080) calc(var(--design-w) * 60 / 1920) calc(var(--design-h) * 30 / 1080) calc(var(--design-w) * 30 / 1920);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 3;
+}
+.game-menu__title {
+    font-family: var(--font-title);
+    color: var(--color-accent);
+    font-size: var(--size-page-heading);
+    font-weight: 400;
+    margin: 0 0 6px 0;
+    line-height: 1;
+}
+.game-menu__title-en {
+    font-family: var(--font-interface);
+    color: var(--color-accent);
+    font-size: var(--size-interface);
+    opacity: 0.7;
+    margin: 0 0 calc(var(--design-h) * 24 / 1080) 0;
+    letter-spacing: 0.1em;
+}
+
+/* 分隔线（侧边栏与主区之间） */
+.game-menu__divider {
+    width: 1px;
+    background: var(--color-accent);
+    opacity: 0.5;
+    position: absolute;
+    left: 22%;
+    top: calc(var(--design-h) * 60 / 1080);
+    bottom: calc(var(--design-h) * 40 / 1080);
+}
+
+/* 主体内容容器默认纵向滚动 */
+.game-menu__body {
+    overflow-y: auto;
+    flex: 1;
+}

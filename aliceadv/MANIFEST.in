@@ -1,0 +1,2 @@
+recursive-include src/aliceadv/template *
+include src/aliceadv/template/.aliceadv_engine

@@ -1,0 +1,32 @@
+{
+    "_comment": "剧本目录与播放顺序。原本放在 theme.json 里的『章节/分支/画廊』目录信息，现已移交给本文件（theme.json 只负责样式管理与界面文本）。引擎从此处读取章节列表、分支与画廊；每一章单独一个剧本文件（story/chX.json）。playOrder 为播放顺序（章节 id 序列），chapters 数组本身也按此顺序排列。",
+
+    "playOrder": ["ch1", "ch2"],
+
+    "chapters": [
+        { "idx": "01", "id": "ch1", "title": "序章",   "desc": "天台上的相遇",   "locked": false, "script": "story/ch1.json" },
+        { "idx": "02", "id": "ch2", "title": "日常",   "desc": "教室里的午后",   "locked": false, "script": "story/ch2.json" },
+        { "idx": "03", "id": "ch3", "title": "相遇",   "desc": "新角色的登场",   "locked": true },
+        { "idx": "04", "id": "ch4", "title": "冲突",   "desc": "矛盾开始酝酿",   "locked": true },
+        { "idx": "05", "id": "ch5", "title": "转折",   "desc": "意想不到的事件", "locked": true },
+        { "idx": "06", "id": "ch6", "title": "尾声",   "desc": "故事落幕",       "locked": true }
+    ],
+
+    "branches": [
+        { "idx": "A", "title": "原谅她",     "desc": "理解并继续",   "locked": false },
+        { "idx": "B", "title": "保持距离",   "desc": "远离并冷静",   "locked": false },
+        { "idx": "C", "title": "追问原因",   "desc": "继续对话",     "locked": true },
+        { "idx": "D", "title": "沉默离开",   "desc": "不置可否",     "locked": true }
+    ],
+
+    "gallery": [
+        { "name": "Eileen 微笑", "locked": false },
+        { "name": "Eileen 沉思", "locked": false },
+        { "name": "Eileen 害羞", "locked": false },
+        { "name": "Eileen 惊讶", "locked": false },
+        { "name": "CG 1",        "locked": false },
+        { "name": "CG 2",        "locked": true },
+        { "name": "CG 3",        "locked": true },
+        { "name": "CG 4",        "locked": true }
+    ]
+}

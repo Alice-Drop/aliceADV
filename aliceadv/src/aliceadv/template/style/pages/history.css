@@ -1,0 +1,73 @@
+/* =========================================================
+ * 历史记录浮层（舞台播放中）
+ * 播放时 say/narrate 的台词实时写入；退出播放即清空。
+ * ========================================================= */
+
+.history-panel {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 8%;
+    bottom: 12%;
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--design-h) * 36 / 1080) calc(var(--design-w) * 70 / 1920) calc(var(--design-h) * 26 / 1080);
+    background-color: transparent;
+    background-image: url("gui/frame.png");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+.history-panel::before, .history-panel::after { display: none; }
+.history-panel__title {
+    font-family: var(--font-title);
+    color: var(--color-accent);
+    font-size: var(--size-section-heading);
+    margin: 0 0 calc(var(--design-h) * 16 / 1080) 0;
+}
+.history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: calc(var(--design-w) * 16 / 1920);
+}
+.history-item {
+    margin: 0 0 calc(var(--design-h) * 16 / 1080) 0;
+}
+.history-item__name {
+    font-family: var(--font-interface);
+    color: var(--color-accent);
+    font-size: var(--size-name);
+    margin-bottom: calc(var(--design-h) * 2 / 1080);
+}
+.history-item__text {
+    font-family: var(--font-text);
+    color: var(--color-text);
+    font-size: var(--size-text);
+    line-height: 1.55;
+    opacity: 0.85;
+}
+.history-panel__back {
+    margin-top: calc(var(--design-h) * 14 / 1080);
+    align-self: center;
+    min-width: calc(var(--design-w) * 160 / 1920);
+    justify-content: center;
+    color: var(--color-accent);
+    font-size: var(--size-interface);
+    height: auto;
+    min-height: 0;
+    padding-top: calc(var(--design-h) * 8 / 1080);
+    padding-bottom: calc(var(--design-h) * 8 / 1080);
+}
+.history-panel__back:hover { color: var(--color-hover); }
+
+/* 空历史提示 */
+.history-list:empty::after {
+    content: "暂无历史记录";
+    display: block;
+    text-align: center;
+    font-family: var(--font-interface);
+    color: var(--color-idle);
+    font-size: var(--size-interface);
+    opacity: 0.6;
+    padding: calc(var(--design-h) * 30 / 1080) 0;
+}

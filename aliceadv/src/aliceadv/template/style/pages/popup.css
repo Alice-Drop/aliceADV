@@ -1,0 +1,51 @@
+/* =========================================================
+ * popup_quitQuery — 退出确认浮层
+ * 居中纸感框 + 确认/取消按钮。
+ * ========================================================= */
+
+.popup {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+}
+.popup.is-active { display: flex; }
+
+.popup__frame {
+    min-width: calc(var(--design-w) * 420 / 1920);
+    padding: calc(var(--design-h) * 36 / 1080) calc(var(--design-w) * 60 / 1920);
+    text-align: center;
+    /* 浮层层级高于页面，确保边框不被遮挡 */
+    z-index: 101;
+    background-color: transparent;
+    background-image: url("gui/frame.png");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+.popup__frame::before, .popup__frame::after { display: none; }
+
+.popup__msg {
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    font-size: var(--size-label);
+    margin: 0 0 calc(var(--design-h) * 22 / 1080) 0;
+}
+
+.popup__actions {
+    display: flex;
+    justify-content: center;
+    gap: calc(var(--design-w) * 60 / 1920);
+}
+.popup__actions .paper-btn {
+    min-width: calc(var(--design-w) * 120 / 1920);
+    color: var(--color-idle);
+    font-size: var(--size-interface);
+    justify-content: center;
+    padding-left: 0;
+}
+.popup__actions .paper-btn:hover { color: var(--color-hover); }
+.popup__actions .paper-btn.is-primary { color: var(--color-accent); }

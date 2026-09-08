@@ -1,0 +1,35 @@
+/* =========================================================
+ * page_branches — 剧情分支
+ * 与章节列表同构，项带分支字母标记 A/B/C/D。
+ * ========================================================= */
+
+.branch-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 12px 0;
+    flex: 1;
+    overflow-y: auto;
+}
+.branch-item {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 14px 24px;
+    cursor: pointer;
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    background-color: var(--color-paper);
+    background-image: var(--paper-noise), linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(0, 0, 0, 0.04) 100%);
+    transition: color 0.12s ease, transform 0.12s ease;
+}
+.branch-item:hover { color: var(--color-hover); transform: translateX(4px); }
+.branch-item__index {
+    font-family: var(--font-title);
+    color: var(--color-accent);
+    font-size: var(--size-label);
+    min-width: calc(var(--design-w) * 48 / 1920);
+}
+.branch-item.is-locked { opacity: 0.4; pointer-events: none; }
+.branch-item__title { flex: 1; font-size: var(--size-interface); }
+.branch-item__desc { font-size: calc(var(--design-w) * 16 / 1920); opacity: 0.7; }

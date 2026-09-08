@@ -1,0 +1,41 @@
+/* =========================================================
+ * page_gallery — 画廊
+ * 4 列网格，每项：图片 + 名称；锁定项显示锁标记。
+ * ========================================================= */
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    flex: 1;
+    align-content: start;
+    padding: 16px 0;
+}
+.gallery-item {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    background: var(--color-paper);
+    background-image: var(--paper-noise);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.15s ease;
+}
+.gallery-item:hover { transform: scale(1.03); }
+.gallery-item__img {
+    position: absolute; inset: 6%;
+    background: #d4cdb8 center/cover no-repeat;
+}
+.gallery-item__label {
+    position: absolute; left: 0; right: 0; bottom: 6%;
+    text-align: center;
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    font-size: calc(var(--design-w) * 16 / 1920);
+}
+.gallery-item.is-locked { opacity: 0.35; pointer-events: none; }
+.gallery-item.is-locked .gallery-item__img::after {
+    content: "🔒";
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--design-w) * 32 / 1920); color: var(--color-accent);
+}

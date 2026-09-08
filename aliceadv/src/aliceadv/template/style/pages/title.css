@@ -1,0 +1,189 @@
+/* =========================================================
+ * page_title — 开始页
+ * 4 种布局：left / center / right / bottom（由 data-layout 控制）
+ * ========================================================= */
+
+#page_title { font-family: var(--font-interface); }
+
+/* 背景兜底：即使背景图缺失也不至于黑屏 */
+#page_title .title-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background-color: #9bb8e8;
+    background-image: linear-gradient(135deg, #bcd2f5 0%, #7e9fd8 100%);
+    background-size: cover;
+    background-position: center;
+}
+
+/* 左布局：左侧按钮列表，右侧全屏背景图 */
+#page_title[data-layout="left"] .title-side {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 28%;
+    min-width: calc(var(--design-w) * 380 / 1920);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 calc(var(--design-w) * 60 / 1920);
+    z-index: 5;
+}
+#page_title[data-layout="left"] .title-meta {
+    position: absolute;
+    right: 5%;
+    bottom: 8%;
+    color: var(--color-accent);
+    font-family: var(--font-title);
+    text-align: right;
+    z-index: 5;
+}
+#page_title[data-layout="left"] .title-meta h1 {
+    margin: 0;
+    font-size: var(--size-title);
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+}
+#page_title[data-layout="left"] .title-meta .version {
+    font-size: var(--size-interface);
+    color: var(--color-accent);
+    opacity: 0.75;
+    margin-top: 8px;
+}
+
+/* 居中布局：所有按钮居中堆叠 */
+#page_title[data-layout="center"] .title-side {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--design-h) * 18 / 1080);
+    z-index: 5;
+}
+#page_title[data-layout="center"] .title-meta {
+    margin-top: calc(var(--design-h) * 32 / 1080);
+    color: var(--color-accent);
+    font-family: var(--font-title);
+    text-align: center;
+}
+#page_title[data-layout="center"] .title-meta h1 {
+    margin: 0;
+    font-size: var(--size-title);
+    font-weight: 400;
+}
+
+/* 右布局：按钮靠右 */
+#page_title[data-layout="right"] .title-side {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 28%;
+    min-width: calc(var(--design-w) * 380 / 1920);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 0 calc(var(--design-w) * 60 / 1920);
+    z-index: 5;
+}
+#page_title[data-layout="right"] .title-meta {
+    position: absolute;
+    left: 5%;
+    bottom: 8%;
+    color: var(--color-accent);
+    font-family: var(--font-title);
+    z-index: 5;
+}
+
+/* 底布局：按钮在底部一排，背景图占满上半部分 */
+#page_title[data-layout="bottom"] .title-side {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: calc(var(--design-h) * 32 / 1080) calc(var(--design-w) * 60 / 1920);
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--design-h) * 18 / 1080);
+    justify-content: center;
+    z-index: 5;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.5) 100%);
+}
+#page_title[data-layout="bottom"] .paper-btn { color: #fff; }
+#page_title[data-layout="bottom"] .paper-btn:hover { color: #cfe2ff; }
+
+/* 标题页按钮：紧凑、自适应 */
+#page_title .paper-btn {
+    width: 100%;
+    min-width: calc(var(--design-w) * 240 / 1920);
+    max-width: calc(var(--design-w) * 340 / 1920);
+    margin: calc(var(--design-h) * 4 / 1080) 0;
+    justify-content: flex-start;
+    padding-left: calc(var(--design-w) * 32 / 1920);
+    font-size: var(--size-interface);
+    color: var(--color-idle);
+    height: auto;
+    min-height: 0;
+    padding-top: calc(var(--design-h) * 8 / 1080);
+    padding-bottom: calc(var(--design-h) * 8 / 1080);
+}
+#page_title[data-layout="center"] .paper-btn,
+#page_title[data-layout="bottom"] .paper-btn {
+    justify-content: center;
+    padding-left: 0;
+}
+
+/* 顶部菜单图标（左布局示例，可点击唤出菜单） */
+.title-menu-icon {
+    position: absolute;
+    top: calc(var(--design-h) * 20 / 1080); left: calc(var(--design-w) * 20 / 1920);
+    width: calc(var(--design-w) * 48 / 1920); height: calc(var(--design-w) * 48 / 1920);
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: calc(var(--design-h) * 6 / 1080);
+}
+.title-menu-icon span {
+    display: block;
+    width: calc(var(--design-w) * 32 / 1920); height: calc(var(--design-h) * 3 / 1080);
+    background: #fff;
+    box-shadow: 0 0 0 calc(var(--design-w) * 1 / 1920) rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================================
+ * 自定义按钮热区（theme.json pages.title.customButtons）
+ * 图片上的按钮：默认透明背景，hover 时显示半透明描边反馈。
+ * 也可配置 image / hover 两张图实现图片按钮。
+ * ========================================================= */
+.title-custom-buttons {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+.title-custom-btn {
+    position: absolute;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    overflow: hidden;
+}
+.title-custom-btn:hover {
+    box-shadow: inset 0 0 0 calc(var(--design-w) * 3 / 1920) rgba(255, 255, 255, 0.35);
+}
+.title-custom-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+.title-custom-btn__label {
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: #fff;
+    text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 4 / 1080) rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}

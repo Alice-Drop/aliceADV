@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aliceADV 引擎</title>
+    <!-- 基础框架样式（变量/重置/舞台/纸感系统/共享组件） -->
+    <link rel="stylesheet" href="style/base.css">
+    <!-- 每个页面一个样式文件，便于后续构建打包 -->
+    <link rel="stylesheet" href="style/pages/title.css">
+    <link rel="stylesheet" href="style/pages/game-menu.css">
+    <link rel="stylesheet" href="style/pages/save.css">
+    <link rel="stylesheet" href="style/pages/load.css">
+    <link rel="stylesheet" href="style/pages/settings.css">
+    <link rel="stylesheet" href="style/pages/chapters.css">
+    <link rel="stylesheet" href="style/pages/branches.css">
+    <link rel="stylesheet" href="style/pages/gallery.css">
+    <link rel="stylesheet" href="style/pages/about.css">
+    <link rel="stylesheet" href="style/pages/stage.css">
+    <link rel="stylesheet" href="style/pages/menu.css">
+    <link rel="stylesheet" href="style/pages/history.css">
+    <link rel="stylesheet" href="style/pages/popup.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <!-- 游戏外框：占满浏览器窗口，负责居中与裁剪 -->
+    <div id="game-frame">
+        <!-- 游戏画布：固定 1920×1080 设计分辨率，由 JS 整体等比例缩放 -->
+        <main id="stage">
+            <!-- 1. 开始页 -->
+            <section id="page_title" class="page is-active" data-layout="left"></section>
+
+            <!-- 2. 存档页 -->
+            <section id="page_save" class="page"></section>
+
+            <!-- 3. 读档页 -->
+            <section id="page_load" class="page"></section>
+
+            <!-- 4. 设置页 -->
+            <section id="page_settings" class="page"></section>
+
+            <!-- 5. 章节页 -->
+            <section id="page_chapters" class="page"></section>
+
+            <!-- 6. 分支页 -->
+            <section id="page_branches" class="page"></section>
+
+            <!-- 7. 舞台 (核心游戏页) -->
+            <section id="page_stage" class="page"></section>
+
+            <!-- 8. 画廊页 -->
+            <section id="page_gallery" class="page"></section>
+
+            <!-- 9. 关于页 -->
+            <section id="page_about" class="page"></section>
+
+            <!-- 浮层：退出确认 -->
+            <div id="popup_quitQuery" class="popup"></div>
+
+            <!-- 浮层：保存成功提示 -->
+            <div id="popup_saveToast" class="popup">
+                <div class="popup__frame paper">
+                    <p class="popup__msg">已保存</p>
+                    <div class="popup__actions">
+                        <button class="paper paper-btn is-primary" data-popup-save-ok="1">确定</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="style/theme.js"></script>
+    <script src="style/script.js"></script>
+    <script src="style/engine.js"></script>
+    <script>
+        (async function bootstrap() {
+            const theme = await AliceADVTheme.loadTheme();
+            if (!theme) {
+                // 模板模式且无法加载 theme.json（如直接 file:// 打开模板）：
+                // 给出使用说明，不写死任何默认内容。
+                AliceADVTheme.showNoThemeNotice();
+                AliceADVEngine.init();
+                return;
+            }
+            // 剧本目录（章节/分支/画廊）来自 story/chapters.json，与 theme.json 解耦
+            const catalog = await AliceADVTheme.loadCatalog();
+            AliceADVTheme.buildAll(theme, catalog);
+            AliceADVEngine.init();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+    "_comment": "角色档案（对象化管理）：每个角色一个对象，name/sprites/textbox/color 结构化放一起。initialName 用于开局未知名字时显示（如 ???），剧本中用 rename 指令揭示名字。textbox 为该角色说话时使用的对话框图片（位于 gui/，可选，不填则使用默认纸感对话框）。sprites 立绘位于 images/char/ 下（与 renpy 的 images/ 目录兼容）。",
+
+    "narrator": {
+        "name": "",
+        "sprites": {},
+        "textbox": null
+    },
+
+    "protagonist": {
+        "name": "我",
+        "color": "#5C5757",
+        "sprites": {},
+        "textbox": null
+    },
+
+    "elin": {
+        "name": "艾琳",
+        "initialName": "？？？",
+        "color": "#3B5998",
+        "textbox": "gui/textbox_dark.png",
+        "sprites": {
+            "normal":    "images/char/elin/normal.png",
+            "smile":     "images/char/elin/smile.png",
+            "surprise":  "images/char/elin/surprise.png"
+        }
+    }
+}

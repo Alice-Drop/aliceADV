@@ -1,0 +1,33 @@
+/* =========================================================
+ * page_settings — 环境设定
+ * 显示模式 / Rollback Side / 快进模式（按钮组 + 复选框）
+ * 文字速度 / 自动等待 / 音量（滑块，来自 base.css .slider）
+ * ========================================================= */
+
+.settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px 60px;
+    align-items: start;
+    margin-top: 12px;
+}
+.settings-group { display: flex; flex-direction: column; gap: 14px; }
+.settings-label {
+    font-family: var(--font-interface);
+    color: var(--color-accent);
+    font-size: var(--size-section-heading);
+    margin-bottom: 6px;
+}
+.settings-buttons { display: flex; flex-direction: column; gap: 10px; }
+.settings-buttons .paper-btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: calc(var(--design-w) * 28 / 1920);
+    color: var(--color-idle);
+    font-size: var(--size-interface);
+}
+.settings-buttons .paper-btn.is-current { color: var(--color-accent); font-weight: 600; }
+.settings-buttons .paper-btn--center { justify-content: center; padding-left: 0; }
+
+/* 滑块下方留白，避免与下一行拥挤 */
+.settings-group .slider { margin-bottom: 6px; }

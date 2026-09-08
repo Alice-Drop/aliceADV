@@ -1,0 +1,281 @@
+/* =========================================================
+ * page_stage — 游戏核心舞台
+ * 背景 / 立绘 / 对话框 / 选项 / 底部工具栏 / 跳过通知
+ * ========================================================= */
+
+/* 背景兜底：图缺失时显示渐变天空，绝不空白 */
+#page_stage .stage-bg {
+    position: absolute;
+    inset: 0;
+    background-color: #bcd2f5;
+    background-image: linear-gradient(180deg, #cfe2ff 0%, #a6c8ff 100%);
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+}
+
+/* 立绘层：剧本 show/sprite/hide 指令操作。
+ * 站位槽 at-left/at-center/at-right（at 未指定时居中），语义对齐 Ren'Py 的
+ * left/center/right 变换：xalign 0.0 / 0.5 / 1.0 且 yalign 1.0（贴底）。
+ *
+ * 尺寸策略（Ren'Py 兼容）：立绘用 <img> 渲染，默认 height:auto 即「按图片原始
+ * 像素显示」。因为 #stage 本身是 1920×1080 的 CSS 像素盒（整体由 transform 缩放），
+ * 所以按设计分辨率作图的立绘/整屏图会与 Ren'Py 完全一致（全屏图铺满、半身像占其真实比例）。
+ * 若工程希望统一缩放，可在 theme.json 的 layout.sprite 里给 height/bottom 相对值。 */
+.stage-chars {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+.stage-char {
+    position: absolute;
+    bottom: var(--sprite-bottom, 0%);
+    height: var(--sprite-height, auto);
+    width: auto;
+    max-width: none;
+    transform: translateX(var(--char-tx, 0));
+    transition: opacity 0.4s ease;
+}
+.stage-char.at-left   { left: 0;   --char-tx: 0; }
+.stage-char.at-center { left: 50%; --char-tx: -50%; }
+.stage-char.at-right  { right: 0;  --char-tx: 0; }
+
+/* 立绘出现/动作动画（transform 里保留站位偏移量 --char-tx） */
+@keyframes char-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes char-bounce {
+    0%   { transform: translateX(var(--char-tx, 0)) translateY(0); }
+    35%  { transform: translateX(var(--char-tx, 0)) translateY(-3%); }
+    60%  { transform: translateX(var(--char-tx, 0)) translateY(0); }
+    80%  { transform: translateX(var(--char-tx, 0)) translateY(-1%); }
+    100% { transform: translateX(var(--char-tx, 0)) translateY(0); }
+}
+@keyframes char-shake {
+    0%, 100% { transform: translateX(var(--char-tx, 0)) translateY(0); }
+    20% { transform: translateX(var(--char-tx, 0)) translateX(-2%); }
+    40% { transform: translateX(var(--char-tx, 0)) translateX(2%); }
+    60% { transform: translateX(var(--char-tx, 0)) translateX(-1.5%); }
+    80% { transform: translateX(var(--char-tx, 0)) translateX(1.5%); }
+}
+.stage-char.anim-fade  { animation: char-fade-in 0.45s ease both; }
+.stage-char.anim-bounce { animation: char-bounce 0.55s ease both; }
+.stage-char.anim-shake { animation: char-shake 0.45s ease both; }
+.stage-char.anim-slide-left { animation: char-fade-in 0.45s ease both; }
+
+/* 章节标题卡（剧本 title 指令） */
+.stage-title-card {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13, 13, 16, 0.55);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+.stage-title-card.is-active { display: flex; opacity: 1; }
+.stage-title-card__text {
+    font-family: var(--font-title);
+    font-size: calc(var(--design-w) * 64 / 1920);
+    color: var(--color-paper);
+    letter-spacing: 0.12em;
+    text-shadow: 0 calc(var(--design-h) * 2 / 1080) calc(var(--design-h) * 12 / 1080) rgba(0, 0, 0, 0.5);
+}
+
+/* NVL 整屏旁白（Ren'Py nvl 模式）：多行文本累积在整屏中央，
+ * 由剧本 narrate{mode:"nvl"} 追加、nvlclear 清空。激活时隐藏底部文本框。 */
+.stage-nvl {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: none;
+    flex-direction: column;
+    justify-content: var(--nvl-justify, center);
+    align-items: flex-start;
+    padding-left: var(--nvl-left, 18.75%);
+    background: var(--nvl-scrim, linear-gradient(180deg,
+        rgba(8, 10, 16, 0) 0%,
+        rgba(8, 10, 16, 0.42) 18%,
+        rgba(8, 10, 16, 0.42) 82%,
+        rgba(8, 10, 16, 0) 100%));
+    pointer-events: none;
+    overflow: hidden;
+}
+.stage-nvl.is-active { display: flex; }
+.stage-nvl__line {
+    width: var(--nvl-width, 62.5%);
+    font-family: var(--font-text);
+    color: var(--nvl-color, #f3efe2);
+    font-size: var(--size-text);
+    line-height: 1.75;
+    margin: var(--nvl-line-gap, 0.5em) 0;
+    text-align: var(--nvl-text-align, left);
+    text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 4 / 1080) rgba(0, 0, 0, 0.6);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 文本框 - 底部纸感框。尺寸/位置全部由 CSS 变量驱动，
+ * 变量值来自 theme.json 的 layout.dialogue（相对值→百分比，构建时翻译）。 */
+.textbox {
+    position: absolute;
+    left: var(--dialogue-left, 5%);
+    bottom: var(--dialogue-bottom, 5%);
+    width: var(--dialogue-width, 90%);
+    height: var(--dialogue-height, 28%);
+    padding: var(--dialogue-pad-top, 2.4em) var(--dialogue-pad-x, 3.4em) var(--dialogue-pad-bottom, 2.4em);
+    box-sizing: border-box;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: var(--dialogue-justify, center);
+    background-color: transparent;
+    background-image: url("gui/textbox.png");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    /* 无台词时不显示对话框（避免 wait/纯背景场景出现空白对话框） */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.22s ease, visibility 0.22s ease;
+}
+.textbox.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+/* 默认对话框外观由 gui/textbox.png 负责，不保留纸感撕裂边 */
+.textbox::before, .textbox::after { display: none; }
+.textbox__name {
+    position: absolute;
+    left: var(--name-left, 3%);
+    top: var(--name-top, -7%);
+    padding: calc(var(--design-h) * 8 / 1080) calc(var(--design-w) * 22 / 1920);
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    font-size: var(--size-name);
+    min-width: calc(var(--design-w) * 180 / 1920);
+    text-align: center;
+}
+.textbox__text {
+    font-family: var(--font-text);
+    color: var(--color-text);
+    font-size: var(--size-text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 角色专属对话框（characters.json 的 textbox 字段，可选）：
+ * 图片替换默认纸感底。文字颜色不再强制改浅色，仍由 --color-text 控制，
+ * 这样浅色对话框（如 demo 的笔记本纸条）上文字也能看清。
+ * 若某角色专属框需要反色，可在其字符 profile 的 textColor 指定。 */
+.textbox.textbox--image {
+    background-color: transparent;
+    background-image: none;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+.textbox.textbox--image::before,
+.textbox.textbox--image::after { display: none; }
+.textbox.textbox--image .textbox__text { color: var(--color-text); }
+.textbox.textbox--image .textbox__name {
+    color: var(--color-text);
+    text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 4 / 1080) rgba(255, 255, 255, 0.25);
+}
+
+/* 选项条 - 位置/宽度由 layout.choice 变量驱动 */
+.choices {
+    position: absolute;
+    left: var(--choice-left, 10%);
+    top: var(--choice-top, 26%);
+    width: var(--choice-width, 80%);
+    max-width: var(--choice-max-width, 60%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--choice-gap, 1.2em);
+    z-index: 6;
+}
+.choice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(var(--design-h) * 56 / 1080);
+    padding: calc(var(--design-h) * 10 / 1080) calc(var(--design-w) * 30 / 1920);
+    font-family: var(--font-interface);
+    color: var(--color-idle);
+    font-size: var(--size-choice);
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    background-image: url("gui/button/choice_idle_background.png");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: color 0.12s ease, transform 0.12s ease;
+}
+.choice:hover {
+    color: var(--color-hover);
+    transform: translateX(4px);
+    background-image: url("gui/button/choice_hover_background.png");
+}
+.choice.is-visited { color: var(--color-accent); opacity: 0.6; }
+
+/* 底部工具栏（快速菜单）——参考 Ren'Py quick_menu：
+ * 底部暗渐变 + 白色文字，按钮无分隔符，均匀排列。
+ */
+.toolbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    min-height: var(--toolbar-height, 6.5em);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--toolbar-gap, 2em);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.38) 100%);
+    color: rgba(255, 255, 255, 0.92);
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 20 / 1920);
+    z-index: 7;
+    pointer-events: none; /* 让按钮各自接收事件 */
+}
+.toolbar__btn {
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 3 / 1080) rgba(0, 0, 0, 0.45);
+    transition: color 0.12s ease, text-shadow 0.12s ease;
+    background: transparent;
+    border: none;
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 20 / 1920);
+    padding: calc(var(--design-h) * 4 / 1080) calc(var(--design-w) * 8 / 1920);
+    pointer-events: auto;
+}
+.toolbar__btn:hover {
+    color: #fff;
+    text-shadow: 0 0 calc(var(--design-w) * 8 / 1920) rgba(255, 255, 255, 0.55);
+}
+.toolbar__btn.is-active { color: #8ec5ff; }
+.toolbar__sep { display: none; }
+
+/* 跳过 / 通知提示 */
+.notify {
+    position: absolute;
+    left: 0; right: 0; top: calc(var(--design-h) * var(--notify-ypos, 68) / 1080);
+    display: flex;
+    justify-content: center;
+    z-index: 8;
+    pointer-events: none;
+}
+.notify__inner {
+    padding: calc(var(--design-h) * 6 / 1080) calc(var(--design-w) * 18 / 1920);
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    font-size: var(--size-notify);
+    min-width: calc(var(--design-w) * 240 / 1920);
+    text-align: center;
+}

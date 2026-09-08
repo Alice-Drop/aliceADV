@@ -1,0 +1,56 @@
+{
+    "_comment": "aliceADV 剧本文件（第一章）。每章一个 JSON 文件，位于 story/ 下。指令(cmd)列表：bg(换背景) music(音乐) show(立绘出现) hide(立绘消失) sprite(切换立绘/表情) say(角色说话) narrate(旁白) rename(角色改名) decide(判定/选项) goto(跳转段) wait(等待) title(章节标题卡) end(章节结束)。剧情按『段(segments)』组织，分支判定点用 decide。背景位于 images/bg/，音乐位于 audio/，与 renpy 目录约定兼容。",
+
+    "id": "ch1",
+    "title": "序章 · 天台的风",
+    "start": "seg_intro",
+
+    "segments": {
+        "seg_intro": [
+            { "cmd": "bg", "src": "images/bg/roof.png", "transition": "fade" },
+            { "cmd": "music", "src": "audio/rooftop.wav", "volume": 0.5, "fade": 1.5 },
+            { "cmd": "title", "text": "序章 · 天台的风" },
+            { "cmd": "narrate", "text": "放学后的天台，风比教室里的流言要温柔一些。" },
+            { "cmd": "narrate", "text": "我趴在栏杆上，看着操场上的社团活动一点点散场。" },
+            { "cmd": "show", "char": "elin", "sprite": "normal", "at": "center", "anim": "fade" },
+            { "cmd": "narrate", "text": "身后传来天台门被推开的声响。" },
+            { "cmd": "say", "char": "elin", "sprite": "normal", "text": "……果然在这里。就知道你会躲到这种地方来。" },
+            { "cmd": "say", "char": "protagonist", "text": "是你啊。社团活动结束了？" },
+            { "cmd": "say", "char": "elin", "sprite": "normal", "text": "提前溜出来的。反正在那边也只是收拾道具而已。" },
+            { "cmd": "decide", "prompt": "她抱着胳膊，似乎在等我说点什么。", "options": [
+                { "text": "「你叫什么名字？」", "goto": "seg_ask_name" },
+                { "text": "「……风挺大的。」（沉默）", "goto": "seg_silence" }
+            ] }
+        ],
+
+        "seg_ask_name": [
+            { "cmd": "say", "char": "protagonist", "text": "对了，还不知道你的名字。方便告诉我吗？" },
+            { "cmd": "sprite", "char": "elin", "sprite": "surprise", "anim": "bounce" },
+            { "cmd": "say", "char": "elin", "sprite": "surprise", "text": "诶？都认识半年了才问这个……你也太迟钝了吧！" },
+            { "cmd": "sprite", "char": "elin", "sprite": "smile" },
+            { "cmd": "rename", "char": "elin", "to": "艾琳" },
+            { "cmd": "say", "char": "elin", "sprite": "smile", "text": "……艾琳。叫我艾琳就好。从今天起，请多指教啦。" },
+            { "cmd": "goto", "segment": "seg_ending" }
+        ],
+
+        "seg_silence": [
+            { "cmd": "say", "char": "protagonist", "text": "……风挺大的。" },
+            { "cmd": "sprite", "char": "elin", "sprite": "surprise", "anim": "shake" },
+            { "cmd": "say", "char": "elin", "sprite": "surprise", "text": "哈？我鼓起勇气跑来天台，你就跟我说风很大？" },
+            { "cmd": "sprite", "char": "elin", "sprite": "normal" },
+            { "cmd": "say", "char": "elin", "sprite": "normal", "text": "……算了。反正你总是这样。" },
+            { "cmd": "rename", "char": "elin", "to": "艾琳" },
+            { "cmd": "say", "char": "elin", "sprite": "smile", "text": "艾琳。我的名字。这次可要记住了，别再让我重复第三遍。" },
+            { "cmd": "goto", "segment": "seg_ending" }
+        ],
+
+        "seg_ending": [
+            { "cmd": "narrate", "text": "夕阳把两个人的影子拉得很长。" },
+            { "cmd": "say", "char": "elin", "sprite": "smile", "text": "明天，也会在这里等你哦。" },
+            { "cmd": "hide", "char": "elin", "anim": "fade" },
+            { "cmd": "music", "stop": true, "fade": 2 },
+            { "cmd": "narrate", "text": "——序章 · 完——" },
+            { "cmd": "end", "action": "title" }
+        ]
+    }
+}

@@ -1,0 +1,68 @@
+/* =========================================================
+ * 游戏内暂停菜单（舞台右侧菜单栏）
+ * 定义.md：菜单按钮即暂停，同 ESC 效果，右侧显示菜单栏，可回首页等。
+ * 最底部有返回按钮：退出菜单继续在 stage 里播放。
+ * ========================================================= */
+
+.ingame-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    display: none;
+    background: rgba(13, 13, 16, 0.45);
+}
+.ingame-overlay.is-active { display: block; }
+
+/* 右侧菜单栏 */
+.ingame-menu {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 26%;
+    min-width: calc(var(--design-w) * 360 / 1920);
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--design-h) * 70 / 1080) calc(var(--design-w) * 40 / 1920) calc(var(--design-h) * 30 / 1080);
+    box-shadow: calc(var(--design-w) * -12 / 1920) 0 calc(var(--design-w) * 40 / 1920) rgba(0, 0, 0, 0.35);
+    background-color: transparent;
+    background-image: url("gui/frame.png");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+/* 面板外观由 gui/frame.png 负责，不保留纸感撕裂边 */
+.ingame-menu::before, .ingame-menu::after { display: none; }
+.ingame-menu__title {
+    font-family: var(--font-title);
+    color: var(--color-accent);
+    font-size: var(--size-section-heading);
+    margin: 0 0 calc(var(--design-h) * 18 / 1080) calc(var(--design-w) * 16 / 1920);
+}
+.ingame-menu__btn {
+    width: 100%;
+    margin: calc(var(--design-h) * 4 / 1080) 0;
+    justify-content: flex-start;
+    padding-left: calc(var(--design-w) * 28 / 1920);
+    color: var(--color-idle);
+    font-size: var(--size-interface);
+    height: auto;
+    min-height: 0;
+    padding-top: calc(var(--design-h) * 8 / 1080);
+    padding-bottom: calc(var(--design-h) * 8 / 1080);
+}
+.ingame-menu__btn:hover { color: var(--color-hover); }
+
+/* 最底部：返回按钮（退出菜单，继续播放） */
+.ingame-menu__back {
+    margin-top: auto;
+    width: 100%;
+    justify-content: center;
+    color: var(--color-accent);
+    font-size: var(--size-interface);
+    height: auto;
+    min-height: 0;
+    padding-top: calc(var(--design-h) * 10 / 1080);
+    padding-bottom: calc(var(--design-h) * 10 / 1080);
+}
+.ingame-menu__back:hover { color: var(--color-hover); }

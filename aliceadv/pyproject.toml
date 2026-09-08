@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aliceadv"
+version = "0.1.0"
+description = "aliceADV - Ren'Py 设计语言的网页 ADV 游戏引擎：工程模板 + 创建/构建编译器"
+requires-python = ">=3.9"
+
+[project.scripts]
+aliceadv = "aliceadv.cli:main"
+
+# 模板（index.html / style / gui / images / audio / story / documents 等）
+# 是纯数据，与编译器实现解耦：将来用其他语言重写编译器时直接复用该目录。
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = true

@@ -1,0 +1,22 @@
+/* =========================================================
+ * page_about — 关于
+ * 游戏名 / 版本 / 引擎信息 / 许可证说明。
+ * ========================================================= */
+
+.about-content {
+    font-family: var(--font-interface);
+    color: var(--color-text);
+    line-height: 1.7;
+    padding: 0;
+    max-width: 900px;
+}
+.about-content h2 {
+    color: var(--color-accent);
+    font-family: var(--font-title);
+    font-size: calc(var(--design-w) * 36 / 1920);
+    font-weight: 400;
+    margin: 0 0 calc(var(--design-h) * 6 / 1080) 0;
+}
+.about-content .ver { color: var(--color-accent); opacity: 0.7; margin: 0 0 calc(var(--design-h) * 24 / 1080) 0; }
+.about-content a { color: var(--color-hover); text-decoration: underline; }
+.about-content p { margin: 0 0 calc(var(--design-h) * 14 / 1080) 0; font-size: var(--size-interface); }
