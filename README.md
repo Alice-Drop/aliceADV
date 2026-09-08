@@ -1,5 +1,7 @@
 # AliceADV
 
+English | [简体中文](./README_zh-CN.md)
+
 AliceADV is a web-based ADV (visual novel) game engine. It follows the design language of Ren'Py: scenes, dialogue, characters, and branching are described in JSON, and the engine produces a static web game that runs in any browser.
 
 The engine ships as a Python package with a `create` / `build` command-line tool. The build output is plain HTML/CSS/JS with no server or runtime dependency — you can open `index.html` directly over `file://` or host it as a static site.
