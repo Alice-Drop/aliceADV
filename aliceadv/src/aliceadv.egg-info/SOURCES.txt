@@ -1,4 +1,6 @@
+LICENSE
 MANIFEST.in
+README.md
 pyproject.toml
 src/aliceadv/__init__.py
 src/aliceadv/__main__.py
@@ -10,6 +12,7 @@ src/aliceadv.egg-info/PKG-INFO
 src/aliceadv.egg-info/SOURCES.txt
 src/aliceadv.egg-info/dependency_links.txt
 src/aliceadv.egg-info/entry_points.txt
+src/aliceadv.egg-info/requires.txt
 src/aliceadv.egg-info/top_level.txt
 src/aliceadv/template/.aliceadv_engine
 src/aliceadv/template/about.txt
@@ -18,6 +21,7 @@ src/aliceadv/template/info.json
 src/aliceadv/template/theme.json
 src/aliceadv/template/audio/rooftop.wav
 src/aliceadv/template/documents/剧本格式说明.md
+src/aliceadv/template/documents/样式控制.md
 src/aliceadv/template/gui/frame.png
 src/aliceadv/template/gui/game_menu.png
 src/aliceadv/template/gui/main_menu.png
@@ -44,6 +48,8 @@ src/aliceadv/template/story/chapters.json
 src/aliceadv/template/story/characters.json
 src/aliceadv/template/style/base.css
 src/aliceadv/template/style/engine.js
+src/aliceadv/template/style/preload.css
+src/aliceadv/template/style/preload.js
 src/aliceadv/template/style/script.js
 src/aliceadv/template/style/theme.js
 src/aliceadv/template/style/pages/about.css
@@ -62,3 +68,4 @@ src/aliceadv/template/style/pages/title.css
 src/aliceadv/tools/__init__.py
 src/aliceadv/tools/gui2theme.py
 src/aliceadv/tools/rpy2adv.py
+tests/test_dialogue_layout.py

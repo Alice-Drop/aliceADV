@@ -1,0 +1,54 @@
+/* =========================================================
+ * aliceADV engine — 启动加载遮罩 (boot loading mask)
+ * 进入游戏网页时显示的纯黑遮罩 + 转圈圈，待启动加载策略
+ * （info.json preload.boot）要求的素材加载完毕后渐隐消失。
+ * 遮罩为纯黑色，不读取主题色变量，确保任意主题下观感一致。
+ * ========================================================= */
+
+/* 启动遮罩：fixed 全屏，置于所有页面与浮层之上 */
+#boot-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    opacity: 1;
+    pointer-events: all;
+    transition: opacity 0.45s ease;
+}
+
+/* 渐隐消失（JS 在素材就绪后加此类） */
+#boot-mask.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 转圈圈 spinner：上边框高亮，其余边框半透明白，CSS 旋转动画 */
+.boot-spinner {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 6px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #ffffff;
+    animation: boot-spin 0.9s linear infinite;
+}
+
+@keyframes boot-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 进度提示文字（可选，由 JS 注入） */
+.boot-hint {
+    position: absolute;
+    bottom: 18%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 14px;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: 0.04em;
+    user-select: none;
+}

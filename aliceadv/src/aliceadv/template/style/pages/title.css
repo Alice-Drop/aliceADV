@@ -48,6 +48,13 @@
     opacity: 0.75;
     margin-top: 8px;
 }
+/* 标题页次级版本行：引擎版本（比游戏版本更暗更小，仅作署名标注） */
+#page_title .title-meta .version.engine {
+    font-size: calc(var(--size-interface) * 0.85);
+    color: var(--color-accent);
+    opacity: 0.5;
+    margin-top: 4px;
+}
 
 /* 居中布局：所有按钮居中堆叠 */
 #page_title[data-layout="center"] .title-side {
@@ -186,4 +193,33 @@
     color: #fff;
     text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 4 / 1080) rgba(0, 0, 0, 0.45);
     pointer-events: none;
+}
+
+/* 失效态：自动存档不可用（关闭或无存档）时，continue 热区置灰、不可点击 */
+.title-custom-btn.is-insensible,
+#page_title .paper-btn.is-insensible {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(0.6);
+}
+
+/* 调试模式（theme.json pages.title.debugHotzones=true）：
+ * 用红框 + action 名可视化每个热区，便于核对与背景图按钮的对齐。 */
+.title-custom-buttons--debug .title-custom-btn {
+    outline: 2px dashed rgba(255, 64, 64, 0.95);
+    background: rgba(255, 64, 64, 0.12);
+}
+.title-custom-buttons--debug .title-custom-btn::after {
+    content: attr(data-key);
+    position: absolute;
+    left: calc(var(--design-w) * 4 / 1920);
+    top: calc(var(--design-h) * 2 / 1080);
+    font-family: var(--font-system);
+    font-size: calc(var(--design-w) * 14 / 1920);
+    line-height: 1.4;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.65);
+    padding: 0 calc(var(--design-w) * 6 / 1920);
+    pointer-events: none;
+    z-index: 2;
 }

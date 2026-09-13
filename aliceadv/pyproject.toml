@@ -5,8 +5,44 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aliceadv"
 version = "0.1.0"
-description = "aliceADV - Ren'Py 设计语言的网页 ADV 游戏引擎：工程模板 + 创建/构建编译器"
-requires-python = ">=3.9"
+description = "aliceADV — a Ren'Py-style web ADV (visual novel) game engine: project template + create/build compiler"
+readme = "README.md"
+requires-python = ">=3.6"
+license = { file = "LICENSE" }
+keywords = ["adv", "visual-novel", "renpy", "game-engine", "web", "visual-novel-engine"]
+authors = [
+    { name = "AliceDrop" },
+]
+maintainers = [
+    { name = "AliceDrop" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/aliceadv/engine"
+Repository = "https://github.com/aliceadv/engine"
+Documentation = "https://github.com/aliceadv/engine#readme"
+
+[project.optional-dependencies]
+dev = ["pytest", "build", "twine"]
 
 [project.scripts]
 aliceadv = "aliceadv.cli:main"
@@ -18,3 +54,10 @@ where = ["src"]
 
 [tool.setuptools]
 include-package-data = true
+
+# 显式声明包内数据文件，确保 wheel 与 sdist 都带上模板（含隐藏标记文件）。
+[tool.setuptools.package-data]
+aliceadv = [
+    "template/**/*",
+    "template/.aliceadv_engine",
+]

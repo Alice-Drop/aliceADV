@@ -125,7 +125,10 @@
     bottom: var(--dialogue-bottom, 5%);
     width: var(--dialogue-width, 90%);
     height: var(--dialogue-height, 28%);
-    padding: var(--dialogue-pad-top, 2.4em) var(--dialogue-pad-x, 3.4em) var(--dialogue-pad-bottom, 2.4em);
+    padding: var(--dialogue-pad-top, 2.4em)
+             var(--dialogue-pad-right, var(--dialogue-pad-x, 3.4em))
+             var(--dialogue-pad-bottom, 2.4em)
+             var(--dialogue-pad-left, var(--dialogue-pad-x, 3.4em));
     box-sizing: border-box;
     z-index: 5;
     display: flex;
@@ -165,6 +168,7 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-wrap: break-word;
+    text-align: var(--dialogue-text-align, left);
 }
 
 /* 角色专属对话框（characters.json 的 textbox 字段，可选）：

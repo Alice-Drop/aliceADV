@@ -19,12 +19,14 @@
      * 注意：这里不再有「help / 帮助文档」；按钮顺序与是否出现完全由 theme.json 决定。 */
     const I18N = {
         start:    "开始游戏",
-        load:     "继续游戏",
+        continue: "继续游戏",
+        load:     "读取存档",
         settings: "设置",
         chapters: "章节选择",
         gallery:  "画廊",
         branches: "剧情分支",
         about:    "关于",
+        title:    "回到首页",
         quit:     "退出游戏",
         back:     "返回",
         save:     "保存",
@@ -40,16 +42,18 @@
      * 顺序与是否出现由 theme.json 的 pages.title.buttons / sidebar 决定。 */
     const NAV = {
         start:    { page: "stage" },
+        continue: { action: "continue" },
         load:     { page: "load" },
         settings: { page: "settings" },
         chapters: { page: "chapters" },
         gallery:  { page: "gallery" },
         branches: { page: "branches" },
         about:    { page: "about" },
+        title:    { page: "title" },   // 暂停菜单「回到首页」
         help:     { page: "about" },   // 兼容在主菜单放 Help 按钮的游戏
         save:     { page: "save" },
         history:  { action: "history" },
-        back:     { page: "title" },
+        back:     { action: "back" },
         quit:     { action: "quit" }
     };
 
@@ -69,19 +73,43 @@
     /* 剧本目录（章节/分支/画廊）。原属于 theme.json 的『目录』信息已移交给 story/chapters.json，
      * 引擎从此处读取，theme.json 只负责样式与界面文本。 */
     let CATALOG = {};
+
+    /* 打包引擎版本：由 builder 在构建产物 index.html 内联为 window.__ENGINE__。
+     * 来源是 aliceadv 包的 ENGINE_NAME / ENGINE_VERSION，而非工程 info.json。
+     * 模板/未构建模式下 window.__ENGINE__ 不存在，ENGINE_LABEL 为空（不展示引擎版本）。 */
+    const ENGINE = (global.__ENGINE__ && typeof global.__ENGINE__ === "object") ? global.__ENGINE__ : {};
+    const ENGINE_LABEL = (ENGINE.name ? ENGINE.name + " " : "") + (ENGINE.version || "");
     let lastTheme = null; // buildAll 时缓存，供 renderSlots 重新渲染存档/读档页
 
-    /* 游戏内暂停菜单（右侧菜单栏）。参考定义.md：菜单即暂停，同 ESC 效果，可回首页等。
-     * 最底部有返回按钮，点击退出菜单继续播放。 */
-    const INGAME_MENU_BUTTONS = [
-        { key: "save",      label: "保存",     page: "save" },
-        { key: "load",      label: "读档",     page: "load" },
-        { key: "settings",  label: "设置",     page: "settings" },
-        { key: "chapters",  label: "章节选择", page: "chapters" },
-        { key: "gallery",   label: "画廊",     page: "gallery" },
-        { key: "about",     label: "关于",     page: "about" },
-        { key: "title",     label: "回到首页", page: "title" }
-    ];
+    /* 游戏内暂停菜单（浮层）。参考定义.md：菜单即暂停，同 ESC 效果，可回首页等。
+     * 按钮列表、停靠方向、窗口尺寸由 theme.json 的 panel 控制（见 buildStagePage / build_panel_css）。
+     * 列表中的 "back" 是浮层底部的「返回」键（关闭浮层、继续播放），区别于侧边栏的返回（goBack）。 */
+    function resolveMenuList(arr, theme) {
+        if (!arr) return arr;
+        const common = (theme && theme.menusCommon) || [];
+        const out = [];
+        arr.forEach(k => {
+            if (k === "__common__") out.push.apply(out, common);
+            else out.push(k);
+        });
+        return out;
+    }
+    function getIngameMenuButtons(theme) {
+        const panelCfg = (theme.panel || {});
+        const keys = resolveMenuList(
+            (panelCfg.buttons && panelCfg.buttons.length) ? panelCfg.buttons
+                : ["save", "load", "settings", "chapters", "gallery", "about", "title", "back"],
+            theme
+        );
+        return keys.map(key => {
+            if (key === "back") {
+                return { key: "back", label: I18N.back || "返回", resume: true };
+            }
+            const def = NAV[key];
+            if (!def) return null;
+            return { key, label: I18N[key] || key, page: def.page || "", action: def.action || "" };
+        }).filter(Boolean);
+    }
 
     /* ---------- 工具：DOM 创建 ---------- */
     function el(tag, attrs, children) {
@@ -112,10 +140,18 @@
     /* ---------- 相对值 → CSS 单位 ----------
      * 数字(0~1)：相对于对应轴 → 百分比。例如 0.9 → 90%。
      * 字符串：原样透传（如 "3.4em" / "60px"）。
+     * 百分比保留 4 位有效数字，避免出现 0.57*100 = 56.99999999999999% 之类浮点误差。
      */
+    function roundSig(v, n) {
+        if (v === 0) return 0;
+        const d = Math.ceil(Math.log10(Math.abs(v)));
+        const f = Math.pow(10, n - d);
+        return Math.round(v * f) / f;
+    }
     function rel(v, fallback) {
         if (v == null) return fallback;
-        return typeof v === "number" ? (v * 100) + "%" : v;
+        if (typeof v === "number") return roundSig(v * 100, 4) + "%";
+        return v;
     }
 
     /* ---------- 1. 主题：写入 CSS 变量 ---------- */
@@ -175,8 +211,14 @@
         setVar("--dialogue-bottom", rel(d.bottom, "5%"));
         setVar("--dialogue-width",  rel(d.width,  "90%"));
         setVar("--dialogue-height", rel(d.height, "28%"));
-        setVar("--dialogue-pad-x",  d.padX  != null ? d.padX  : "3.4em");
-        setVar("--dialogue-pad-y",  d.padY  != null ? d.padY  : "2.4em");
+        const padX = d.padX != null ? d.padX : "3.4em";
+        setVar("--dialogue-pad-x",      padX);
+        setVar("--dialogue-pad-left",   d.padLeft  != null ? d.padLeft  : padX);
+        setVar("--dialogue-pad-right",  d.padRight != null ? d.padRight : padX);
+        setVar("--dialogue-pad-top",    d.padTop != null ? d.padTop : (d.padY != null ? d.padY : "2.4em"));
+        setVar("--dialogue-pad-bottom", d.padBottom != null ? d.padBottom : (d.padY != null ? d.padY : "2.4em"));
+        setVar("--dialogue-justify",    d.justify != null ? d.justify : "center");
+        setVar("--dialogue-text-align", d.textAlign != null ? d.textAlign : "left");
         const n = L.name || {};
         setVar("--name-left", rel(n.left, "3%"));
         setVar("--name-top",  rel(n.top,  "-7%"));
@@ -191,6 +233,16 @@
         setVar("--toolbar-gap",    t.gap    != null ? t.gap    : "2em");
     }
     function camel(s) { return s.replace(/[-_](.)/g, (_, c) => c.toUpperCase()); }
+
+    /* 继续按钮是否可用：自动存档开启 且 存在自动存档。
+     * 任一不满足时，首页「继续」按钮置灰失效（但按用户约定，按钮的「显示/隐藏」由 theme.json 控制，引擎只负责有效性）。 */
+    function continueUsable() {
+        const S = global.AliceADVScript;
+        if (!S || !S.autoSaveEnabled) return false;
+        if (!S.autoSaveEnabled()) return false;
+        if (!S.getSave) return false;
+        return !!S.getSave("auto", 0);
+    }
 
     /* ---------- 2. 开始页 (page_title) ---------- */
     function buildTitlePage(theme) {
@@ -208,6 +260,10 @@
         } else {
             bg.style.background = "linear-gradient(135deg, #cfe2ff 0%, #a6c8ff 50%, #6e9be5 100%)";
         }
+        // 背景铺满方式：自定义热区模式默认 100% 100%（图片 0~1 坐标与热区 0~1 坐标严格对齐）；
+        // 普通布局默认 cover（保持比例、可能裁切，适合纯装饰背景）。可用 backgroundSize 覆盖。
+        bg.style.backgroundSize = cfg.backgroundSize
+            || (cfg.customButtons && cfg.customButtons.length ? "100% 100%" : "cover");
         root.appendChild(bg);
 
         if (cfg.overlay) root.appendChild(el("div", { class: "page__overlay" }));
@@ -216,9 +272,12 @@
         const info = (theme.info || {});
         if (cfg.showName !== false && info.name) {
             const meta = el("div", { class: "title-meta" }, [ el("h1", { text: info.name }) ]);
-            if (cfg.showVersion !== false && info.version) {
-                meta.appendChild(el("div", { class: "version", text: "v" + info.version }));
-            }
+        if (cfg.showVersion !== false && info.version) {
+            meta.appendChild(el("div", { class: "version", text: "v" + info.version }));
+        }
+        if (cfg.showVersion !== false && ENGINE_LABEL) {
+            meta.appendChild(el("div", { class: "version engine", text: ENGINE_LABEL }));
+        }
             root.appendChild(meta);
         }
 
@@ -227,7 +286,8 @@
         const customButtons = cfg.customButtons;
         if (customButtons && customButtons.length) {
             const firstChapter = (CATALOG.chapters || []).find(c => !c.locked && c.script);
-            const tray = el("div", { class: "title-custom-buttons" });
+            const trayCls = "title-custom-buttons" + (cfg.debugHotzones ? " title-custom-buttons--debug" : "");
+            const tray = el("div", { class: trayCls });
             customButtons.forEach(btn => {
                 const key = btn.action;
                 const def = NAV[key];
@@ -239,6 +299,8 @@
                     `height:${rel(btn.height, "auto")}`
                 ].join(";");
                 const isStart = key === "start";
+                const isContinue = key === "continue";
+                const cDisabled = isContinue && !continueUsable();
                 const children = [];
                 if (btn.image) {
                     const img = el("img", { src: resolveAsset(btn.image), alt: btn.label || I18N[key] || key });
@@ -251,12 +313,13 @@
                     children.push(el("span", { class: "title-custom-btn__label", text: btn.label }));
                 }
                 const node = el("button", {
-                    class: "title-custom-btn",
+                    class: "title-custom-btn" + (cDisabled ? " is-insensible" : ""),
                     style: style,
                     "data-page": (isStart && firstChapter) ? "" : (def.page || ""),
                     "data-script": (isStart && firstChapter) ? firstChapter.script : "",
                     "data-action": def ? (def.action || "") : "",
                     "data-key": key,
+                    "disabled": cDisabled || undefined,
                     onmouseenter: btn.hover ? (e => {
                         const img = e.currentTarget.querySelector("img");
                         if (img) img.src = resolveAsset(btn.hover);
@@ -272,21 +335,28 @@
             return;
         }
 
-        // 按钮列表：顺序严格按 theme.json 的 pages.title.buttons（不写死）
+        // 按钮列表：顺序严格按 theme.json 的 pages.title.buttons（不写死）；
+        // "__common__" 展开为 theme.menusCommon 公共列表
         const side = el("div", { class: "title-side" });
-        const order = (cfg.buttons && cfg.buttons.length) ? cfg.buttons
-                    : ["start", "load", "settings", "chapters", "gallery", "branches", "about", "quit"];
+        const order = resolveMenuList(
+            (cfg.buttons && cfg.buttons.length) ? cfg.buttons
+                : ["start", "continue", "load", "settings", "chapters", "gallery", "branches", "about", "quit"],
+            theme
+        );
         // 开始游戏：绑定第一个可玩章节的剧本文件（由剧本运行时接管）
         const firstChapter = (CATALOG.chapters || []).find(c => !c.locked && c.script);
         order.forEach(key => {
             const def = NAV[key];
             if (!def) return; // 未知键跳过，不报错
+            const isContinue = key === "continue";
+            const cDisabled = isContinue && !continueUsable();
             side.appendChild(el("button", {
-                class: "paper paper-btn",
+                class: "paper paper-btn" + (cDisabled ? " is-insensible" : ""),
                 "data-page": (key === "start" && firstChapter) ? "" : (def.page || ""),
                 "data-script": (key === "start" && firstChapter) ? firstChapter.script : "",
                 "data-action": def.action || "",
                 "data-key": key,
+                "disabled": cDisabled || undefined,
                 text: I18N[key] || key
             }));
         });
@@ -311,15 +381,23 @@
 
         const menu = el("div", { class: "game-menu" });
 
-        // 侧边栏：顺序按 theme.json 的 sidebar（不写死）
+        // 侧边栏停靠：依据 theme.sidebarSide（"left" / "right"，默认 "left"）给 .game-menu 加对应类，
+        // 由 game-menu.css 决定网格列顺序与分隔线位置。
+        const menuSide = ((theme.sidebarSide || "left") + "").toLowerCase();
+        menu.classList.add("game-menu--sidebar-" + (menuSide === "right" ? "right" : "left"));
+
+        // 侧边栏按钮顺序按 theme.json 的 sidebar（不写死）；"__common__" 展开为 theme.menusCommon
         const sidebar = el("div", { class: "game-menu__sidebar" });
-        const sideOrder = (theme.sidebar && theme.sidebar.length) ? theme.sidebar
-                        : ["history", "save", "load", "settings", "chapters", "gallery", "branches", "about", "back"];
+        const sideOrder = resolveMenuList(
+            (theme.sidebar && theme.sidebar.length) ? theme.sidebar
+                : ["history", "save", "load", "settings", "chapters", "gallery", "branches", "about", "back"],
+            theme
+        );
         sideOrder.forEach(key => {
             const def = NAV[key];
             if (!def) return;
             sidebar.appendChild(el("button", {
-                class: "paper paper-btn" + (key === currentKey ? " is-current" : ""),
+                class: "paper paper-btn" + (key === "back" ? " back-btn" : "") + (key === currentKey ? " is-current" : ""),
                 "data-page": def.page || "",
                 "data-action": def.action || "",
                 text: I18N[key] || key
@@ -347,13 +425,25 @@
         const total = cols * rows;
         const grid = el("div", { class: "slots-grid", style: `--slot-cols:${cols};` });
         const Script = global.AliceADVScript;
+        const autoOn  = Script && Script.autoSaveEnabled  ? Script.autoSaveEnabled()  : true;
+        const quickOn = Script && Script.quickSaveEnabled ? Script.quickSaveEnabled() : true;
 
-        for (let i = 1; i <= total; i++) {
-            const data = (Script && Script.getSave) ? Script.getSave(i) : null;
+        // 槽位顺序：自动存档 → 快速存档 → 普通手动槽。
+        // 关闭的开关对应系统槽从列表移除（关闭后首页「继续」/ 菜单「快读」在逻辑层失效）。
+        // 手动槽紧随其后，普通存档只能写入这些槽，无法覆盖系统槽。
+        const descs = [];
+        if (autoOn)  descs.push({ kind: "auto",  n: 0, system: true, label: "自动存档" });
+        if (quickOn) descs.push({ kind: "quick", n: 0, system: true, label: "快速存档" });
+        let m = 1;
+        while (descs.length < total) { descs.push({ kind: "manual", n: m, system: false, label: "存档 " + m }); m++; }
+
+        descs.forEach(d => {
+            const data = (Script && Script.getSave) ? Script.getSave(d.kind, d.n) : null;
             const filled = !!data;
             const slot = el("div", {
-                class: "slot" + (filled ? "" : " is-empty"),
-                "data-slot-index": i
+                class: "slot" + (filled ? "" : " is-empty") + (d.system ? " slot--system" : ""),
+                "data-slot-kind": d.kind,
+                "data-slot-index": d.n
             });
             ["tl", "tr", "bl", "br"].forEach(pos => {
                 slot.appendChild(el("div", { class: `slot__corner slot__corner--${pos}` }));
@@ -362,7 +452,7 @@
             if (filled && data.display && data.display.thumb) {
                 thumb.style.backgroundImage = `url("${resolveAsset(data.display.thumb)}")`;
             } else {
-                thumb.textContent = "Empty slot";
+                thumb.textContent = d.system ? d.label : "Empty slot";
             }
             slot.appendChild(thumb);
             const meta = el("div", { class: "slot__meta" });
@@ -371,11 +461,11 @@
                 meta.appendChild(el("div", { class: "slot__text", text: data.display.text || "" }));
                 meta.appendChild(el("div", { class: "slot__time", text: data.timeStr || "" }));
             } else {
-                meta.textContent = `Slot ${i}`;
+                meta.appendChild(el("div", { class: "slot__name", text: d.label }));
             }
             slot.appendChild(meta);
             grid.appendChild(slot);
-        }
+        });
         body.appendChild(grid);
 
         const jumper = el("div", { class: "page-jumper" }, [
@@ -504,7 +594,8 @@
         const aboutText = (theme.about || "").trim();
         const c = el("div", { class: "about-content" });
         c.appendChild(el("h2", { text: info.name || "游戏名" }));
-        if (info.version) c.appendChild(el("div", { class: "ver", text: "Version " + info.version }));
+        if (info.version) c.appendChild(el("div", { class: "ver", text: "游戏版本 " + info.version }));
+        if (ENGINE_LABEL) c.appendChild(el("div", { class: "ver", text: "引擎版本 " + ENGINE_LABEL }));
         c.appendChild(el("p", { text: "由 aliceADV 引擎驱动 (MIT License)" }));
         c.appendChild(el("p", { html: "引擎仓库: <a href='#'>github.com/aliceadv/engine</a>" }));
         if (aboutText) {
@@ -585,20 +676,25 @@
         // 游戏内菜单浮层（右侧菜单栏 + 底部返回按钮）
         const menuPanel = el("div", { class: "ingame-menu paper" });
         menuPanel.appendChild(el("div", { class: "ingame-menu__title", text: "菜单" }));
-        INGAME_MENU_BUTTONS.forEach(b => {
-            menuPanel.appendChild(el("button", {
-                class: "paper paper-btn ingame-menu__btn",
-                "data-page": b.page || "",
-                "data-resume": b.resume ? "1" : "",
-                text: b.label
-            }));
+        // 按钮列表来自 theme.json 的 panel.buttons（默认见 getIngameMenuButtons）。
+        // "back" 渲染为浮层底部「返回」键（data-resume，关闭浮层、继续播放）；
+        // 其余键渲染为普通按钮（data-page / data-action）。
+        getIngameMenuButtons(theme).forEach(b => {
+            if (b.resume) {
+                menuPanel.appendChild(el("button", {
+                    class: "paper paper-btn ingame-menu__back",
+                    "data-resume": "1",
+                    text: b.label
+                }));
+            } else {
+                menuPanel.appendChild(el("button", {
+                    class: "paper paper-btn ingame-menu__btn",
+                    "data-page": b.page || "",
+                    "data-action": b.action || "",
+                    text: b.label
+                }));
+            }
         });
-        // 最底部：返回按钮（退出菜单，继续在 stage 里播放）
-        menuPanel.appendChild(el("button", {
-            class: "paper paper-btn ingame-menu__back",
-            "data-resume": "1",
-            text: "返回"
-        }));
         root.appendChild(el("div", { id: "overlay_menu", class: "ingame-overlay" }, [menuPanel]));
 
         // 历史记录浮层（内容由剧本运行时渲染）
@@ -666,6 +762,10 @@
         ["save", "load"].forEach(k => buildGameMenuPage("page_" + k, lastTheme, k));
     }
 
+    /* 暴露已加载的主题 / 目录（供 engine.js 的页面预加载 hook 取用）。 */
+    function getTheme() { return lastTheme; }
+    function getCatalog() { return CATALOG; }
+
     async function loadTheme() {
         // 构建产物会把主题内联为 window.__THEME__（无需 fetch，file:// 直接可用）
         if (global.__THEME__) return global.__THEME__;
@@ -705,5 +805,5 @@
         return {};
     }
 
-    global.AliceADVTheme = { loadTheme, loadCatalog, buildAll, renderSlots, showNoThemeNotice, I18N };
+    global.AliceADVTheme = { loadTheme, loadCatalog, buildAll, renderSlots, showNoThemeNotice, getTheme, getCatalog, I18N };
 })(window);

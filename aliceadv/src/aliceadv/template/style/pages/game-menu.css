@@ -12,6 +12,24 @@
     z-index: 2;
 }
 
+/* 侧边栏停靠方向：theme.js 依据 theme.sidebarSide 给 .game-menu 加
+ * game-menu--sidebar-left / -right。
+ * left（默认）：sidebar 在第 1 列、main 在第 2 列、分隔线在 22% 处。
+ * right：左右翻转（sidebar 在第 2 列、main 在第 1 列、分隔线在右侧 22% 处）。 */
+.game-menu--sidebar-left  { grid-template-columns: 22% 1fr; }
+.game-menu--sidebar-left  .game-menu__sidebar { grid-column: 1; }
+.game-menu--sidebar-left  .game-menu__main    { grid-column: 2; }
+.game-menu--sidebar-left  .game-menu__divider { left: 22%; right: auto; }
+
+.game-menu--sidebar-right { grid-template-columns: 1fr 22%; }
+.game-menu--sidebar-right .game-menu__sidebar { grid-column: 2; }
+.game-menu--sidebar-right .game-menu__main    { grid-column: 1; }
+.game-menu--sidebar-right .game-menu__divider { right: 22%; left: auto; }
+.game-menu--sidebar-right .game-menu__sidebar {
+    padding-left: calc(var(--design-w) * 30 / 1920);
+    padding-right: calc(var(--design-w) * 50 / 1920);
+}
+
 /* 侧边栏：竖向按钮列表 + 返回按钮 */
 .game-menu__sidebar {
     position: relative;

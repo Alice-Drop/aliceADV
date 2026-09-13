@@ -19,8 +19,9 @@
 import json
 import os
 import shutil
+import re
 
-from . import ENGINE_MARKER, ENGINE_RUNTIME, template_path
+from . import ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME, template_path
 from .cssutil import rewrite_css_asset_paths
 
 # 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件）
@@ -102,11 +103,14 @@ def build_css_vars(theme):
     lines.append(f"  --dialogue-bottom: {rel(d.get('bottom'), '5%')};")
     lines.append(f"  --dialogue-width: {rel(d.get('width'), '90%')};")
     lines.append(f"  --dialogue-height: {rel(d.get('height'), '28%')};")
-    lines.append(f"  --dialogue-pad-x: {d.get('padX', '3.4em')};")
-    lines.append(f"  --dialogue-pad-y: {d.get('padY', '2.4em')};")
+    _padx = d.get('padX', '3.4em')
+    lines.append(f"  --dialogue-pad-x: {_padx};")
+    lines.append(f"  --dialogue-pad-left: {d.get('padLeft', _padx)};")
+    lines.append(f"  --dialogue-pad-right: {d.get('padRight', _padx)};")
     lines.append(f"  --dialogue-pad-top: {d.get('padTop', d.get('padY', '2.4em'))};")
     lines.append(f"  --dialogue-pad-bottom: {d.get('padBottom', d.get('padY', '2.4em'))};")
     lines.append(f"  --dialogue-justify: {d.get('justify', 'center')};")
+    lines.append(f"  --dialogue-text-align: {d.get('textAlign', 'left')};")
     n = L.get("name", {})
     lines.append(f"  --name-left: {rel(n.get('left'), '3%')};")
     lines.append(f"  --name-top: {rel(n.get('top'), '-7%')};")
@@ -134,18 +138,61 @@ def build_css_vars(theme):
 
 
 def build_panel_css(theme):
-    """游戏内浮层面板（菜单）停靠方向：left=左侧栏 / right=右侧栏。
-    由 theme.json 的 panel.side 控制；构建时翻译为 .ingame-menu 的 CSS 定位，
-    覆盖模板 menu.css 中的默认停靠（right）。"""
-    side = ((theme.get("panel") or {}).get("side") or "right").lower()
-    if side not in ("left", "right"):
+    """游戏内暂停菜单（.ingame-menu 浮层）的停靠方向、窗口尺寸。
+
+    由 theme.json 的 panel 控制：
+      - panel.side:   "left" / "right" / "center"（默认 "right"）
+      - panel.width:  窗口宽（px，相对 info.json 的 screen.designWidth 转换为比例）
+      - panel.height: 窗口高（px，相对 screen.designHeight；可选，缺省为整屏高）
+
+    构建时把 px 转换为相对于设计画布的比例（与 定义.md「按钮以 px 为单位 → 比例」一致），
+    覆盖模板 menu.css 中的默认停靠（right）与默认宽（26%）。
+    """
+    panel = theme.get("panel") or {}
+    side = (panel.get("side") or "right").lower()
+    if side not in ("left", "right", "center"):
         side = "right"
+    screen = theme.get("screen") or {}
+    dw = screen.get("designWidth") or 1920
+    dh = screen.get("designHeight") or 1080
+    width_px = panel.get("width", 500)
+    height_px = panel.get("height")
+
+    w_ratio = float(width_px) / dw
+    lines = [
+        "/* 游戏内暂停菜单停靠方向 / 窗口尺寸：由 theme.json panel.side / panel.width / panel.height 控制。",
+        "   请勿手改，改 theme.json 后重新 build。 */",
+        ".ingame-menu {",
+    ]
     if side == "left":
-        rule = ".ingame-menu {\n    left: 0;\n    right: auto;\n}"
+        lines.append("  left: 0;")
+        lines.append("  right: auto;")
+    elif side == "right":
+        lines.append("  right: 0;")
+        lines.append("  left: auto;")
+    else:  # center
+        lines.append("  left: 50%;")
+        lines.append("  right: auto;")
+
+    lines.append(f"  width: calc(var(--design-w) * {w_ratio:.6f});")
+    lines.append(f"  min-width: calc(var(--design-w) * {w_ratio:.6f});")
+
+    if height_px:
+        h_ratio = float(height_px) / dh
+        lines.append("  top: 50%;")
+        lines.append("  bottom: auto;")
+        lines.append(f"  height: calc(var(--design-h) * {h_ratio:.6f});")
+        if side == "center":
+            lines.append("  transform: translate(-50%, -50%);")
+        else:
+            lines.append("  transform: translateY(-50%);")
     else:
-        rule = ".ingame-menu {\n    right: 0;\n    left: auto;\n}"
-    return ("/* 游戏内浮层面板停靠方向：由 theme.json panel.side 控制（left/right）。"
-            " 请勿手改，改 theme.json 后重新 build。 */\n" + rule)
+        lines.append("  top: 0;")
+        lines.append("  bottom: 0;")
+        if side == "center":
+            lines.append("  transform: translateX(-50%);")
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def build_fonts_css(theme):
@@ -300,27 +347,32 @@ def build_project(project_dir):
     # 7a. 引入字体 @font-face（fonts.built.css 已在 step 5b 生成，此处只引入）
     if fonts_css:
         # 置于 base.css 之后，确保字体规则尽早注册（在页面样式引用前生效）
-        html = html.replace(
-            '<link rel="stylesheet" href="style/base.css">',
+        html = re.sub(
+            r'<link[^>]*href="style/base\.css"[^>]*>',
             '<link rel="stylesheet" href="style/base.css">\n'
             '    <link rel="stylesheet" href="style/fonts.built.css">',
-            1
+            html, count=1
         )
 
     # 7b. 引入构建 css（置于所有页面样式之后，确保用户的 theme.json 配置覆盖模板默认值）
-    html = html.replace(
-        '<link rel="stylesheet" href="style/pages/popup.css">',
+    html = re.sub(
+        r'<link[^>]*href="style/pages/popup\.css"[^>]*>',
         '<link rel="stylesheet" href="style/pages/popup.css">\n'
         '    <link rel="stylesheet" href="style/theme.built.css">',
-        1
+        html, count=1
     )
 
     # 7b. 把主题与剧本内联（在 theme.js 之前），使 file:// 直接可用
     theme_inline = json.dumps(theme, ensure_ascii=False)
     scripts_inline = json.dumps(scripts, ensure_ascii=False)
+    # 打包引擎版本：来自 aliceadv 包（ENGINE_NAME/ENGINE_VERSION），
+    # 而非工程 info.json，使构建产物在关于页/标题页展示「引擎版本」。
+    engine_inline = json.dumps(
+        {"name": ENGINE_NAME, "version": ENGINE_VERSION}, ensure_ascii=False)
     html = html.replace(
         '<script src="style/theme.js"></script>',
-        f'<script>window.__THEME__ = {theme_inline};</script>\n'
+        f'<script>window.__ENGINE__ = {engine_inline};</script>\n'
+        f'    <script>window.__THEME__ = {theme_inline};</script>\n'
         f'    <script>window.__SCRIPTS__ = {scripts_inline};</script>\n'
         '    <script src="style/theme.js"></script>',
         1
@@ -333,6 +385,7 @@ def build_project(project_dir):
     print(f"  工程: {project_dir}")
     print(f"  主题: {theme.get('info', {}).get('name', '(未命名)')} "
           f"v{theme.get('info', {}).get('version', '?')}")
+    print(f"  引擎: {ENGINE_NAME} {ENGINE_VERSION}")
     print(f"  剧本: {len(scripts)} 个文件已内联 ({', '.join(scripts.keys()) if scripts else '无'})")
     print(f"  产物: {os.path.relpath(html_path, project_dir)}")
     print("  预览: 直接打开该 index.html，或在工程目录运行 python3 -m http.server 后访问 dist/web/")

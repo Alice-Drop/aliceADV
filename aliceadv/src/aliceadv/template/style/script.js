@@ -821,16 +821,31 @@
     }
 
     /* ---------- 存档 / 读档（localStorage） ---------- */
+    // 存档槽分三类：auto（自动存档）/ quick（快速存档）/ manual（手动存档）。
+    // 三者 localStorage 键名互不冲突，手动存档无法覆盖系统槽。
     const SAVE_PREFIX = "aliceADV.save.";
-    function saveKey(slot) { return slot === 0 ? "aliceADV.quick" : SAVE_PREFIX + slot; }
-    function readSave(slot) {
-        try { const raw = localStorage.getItem(saveKey(slot)); return raw ? JSON.parse(raw) : null; }
+    function saveKey(kind, n) {
+        if (kind === "auto") return "aliceADV.auto";
+        if (kind === "quick") return "aliceADV.quick";
+        return SAVE_PREFIX + n;
+    }
+    function readSave(kind, n) {
+        try { const raw = localStorage.getItem(saveKey(kind, n)); return raw ? JSON.parse(raw) : null; }
         catch (e) { return null; }
     }
-    function writeSave(slot, obj) {
-        try { localStorage.setItem(saveKey(slot), JSON.stringify(obj)); return true; }
+    function writeSave(kind, n, obj) {
+        try { localStorage.setItem(saveKey(kind, n), JSON.stringify(obj)); return true; }
         catch (e) { console.warn("[aliceADV] 保存失败（localStorage 不可用或配额已满）", e); return false; }
     }
+    // 自动存档 / 快速存档开关取自 info.json（构建时合并进 window.__THEME__.info）。
+    // 缺省视为开启；关闭后对应系统槽从界面消失、对应动作失效（见 load / 槽位渲染）。
+    function cfgBool(name, def) {
+        const info = (global.__THEME__ && global.__THEME__.info) || {};
+        const v = info[name];
+        return (v === undefined || v === null) ? def : !!v;
+    }
+    function autoSaveEnabled()  { return cfgBool("autoSave", true); }
+    function quickSaveEnabled() { return cfgBool("quickSave", true); }
     function pad2(n) { return String(n).padStart(2, "0"); }
     function fmtTime(d) {
         return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
@@ -850,14 +865,14 @@
         }
         return { label: label, text: text, thumb: (snap && snap.bg) || "" };
     }
-    // 保存当前进度到指定槽位（slot=0 为快速存档专用槽）
-    function save(slot) {
-        if (!state.playing) return false;
-        const snap = state.snaps.length ? state.snaps[state.snaps.length - 1] : null;
-        if (!snap) return false;
+    // 取最近一条快照（即当前停在屏幕上的那句）
+    function lastSnap() { return state.snaps.length ? state.snaps[state.snaps.length - 1] : null; }
+
+    // 由快照构建存档对象（三类槽共用，存全量运行时状态以便精确还原）
+    function buildSaveObject(snap) {
         const now = new Date();
         const disp = buildDisplay(snap);
-        const obj = {
+        return {
             version: 1,
             scriptPath: (state.script && state.script.__path) || "",
             time: now.getTime(),
@@ -874,13 +889,39 @@
             snap: JSON.parse(JSON.stringify(snap)),
             display: { label: disp.label, text: disp.text, thumb: disp.thumb }
         };
-        return writeSave(slot, obj);
     }
-    // 读取指定槽位的存档对象（供 UI 渲染槽位信息；返回 null 表示空槽）
-    function getSave(slot) { return readSave(slot); }
+
+    // 自动存档：每前进一步由 advance() 调用，记录当前位置供首页「继续」使用。
+    // 自动存档关闭时不写入（旧档由 load 端拦截，界面也不再展示）。
+    function saveAuto() {
+        if (!state.playing || !autoSaveEnabled()) return false;
+        const snap = lastSnap();
+        if (!snap) return false;
+        return writeSave("auto", 0, buildSaveObject(snap));
+    }
+    // 快速存档：菜单「快存」使用（slot 0 / quick）。
+    function saveQuick() {
+        if (!state.playing || !quickSaveEnabled()) return false;
+        const snap = lastSnap();
+        if (!snap) return false;
+        return writeSave("quick", 0, buildSaveObject(snap));
+    }
+    // 手动存档：写入第 n 个普通槽（n>=1），不被系统槽占用。
+    function saveManual(n) {
+        if (!state.playing) return false;
+        if (!(n >= 1)) return false;
+        const snap = lastSnap();
+        if (!snap) return false;
+        return writeSave("manual", n, buildSaveObject(snap));
+    }
+    // 读取指定槽位存档对象（供 UI 渲染；null = 空槽）
+    function getSave(kind, n) { return readSave(kind, n); }
     // 读档：恢复进度并回到舞台继续游玩
-    async function load(slot) {
-        const data = readSave(slot);
+    async function load(kind, n) {
+        // 关闭的系统槽不可读：自动存档关闭则「继续」失效，快速存档关闭则「快读」失效
+        if (kind === "auto"  && !autoSaveEnabled())  return false;
+        if (kind === "quick" && !quickSaveEnabled()) return false;
+        const data = readSave(kind, n);
         if (!data) return false;
         // 确保剧本已加载（从标题直接进入读档时可能尚未 start）
         if (!state.script || (state.script.__path && state.script.__path !== data.scriptPath)) {
@@ -917,10 +958,15 @@
             applySnap(snap);
             renderHistory();
         }
+        // 读档后预加载接下来将出现的资源（同 advance 的 predict hook，音效优先级最高）
+        if (global.AliceADVPreload) global.AliceADVPreload.hookPredict(state.script, state.seg, state.idx);
         state.waiting = true;
         if (global.AliceADVEngine) global.AliceADVEngine.showPage("page_stage");
         return true;
     }
+    // 便捷封装：首页「继续」/ 菜单「快读」直接调用
+    function loadAuto()  { return load("auto", 0); }
+    function loadQuick() { return load("quick", 0); }
 
     /* ---------- 运行循环 ---------- */
     function jumpTo(segment) {
@@ -940,6 +986,9 @@
         // 若章节标题卡仍在展示（用户点击推进），先收起
         const card = stageRoot() && stageRoot().querySelector(".stage-title-card");
         if (card) card.classList.remove("is-active");
+        // 运行时预加载：向前扫描预取接下来将出现的音效/语音/背景/立绘
+        // （info.json preload.runtime 含 "predict" 时生效，音效/音乐优先级最高）
+        if (global.AliceADVPreload) global.AliceADVPreload.hookPredict(state.script, state.seg, state.idx);
         const segs = state.script.segments;
         let guard = 0;
         while (guard++ < 10000) {
@@ -948,7 +997,7 @@
             const c = list[state.idx];
             const blocking = exec(c);
             state.idx++;
-            if (blocking) { state.waiting = true; return; }
+            if (blocking) { state.waiting = true; saveAuto(); return; }
         }
     }
 
@@ -1290,7 +1339,8 @@
 
     global.AliceADVScript = {
         start, next, rollback, exit, setAuto, setSkip, renderHistory,
-        save, load, getSave,
+        saveAuto, saveQuick, saveManual, loadAuto, loadQuick,
+        load, getSave, autoSaveEnabled, quickSaveEnabled,
         state,
         isPlaying: () => state.playing,
         history: () => state.history

@@ -1,2 +1,15 @@
+# aliceADV 打包清单（sdist 包含项）
+# 引擎运行时模板是纯数据，必须与编译器一起发布，供 `aliceadv create` 复制。
+
+# 模板目录（index.html / style / gui / images / audio / story / documents 等）
 recursive-include src/aliceadv/template *
+
+# 引擎模板标记文件（隐藏文件，recursive-include 的 * 不会匹配点文件，需单独声明）
 include src/aliceadv/template/.aliceadv_engine
+
+# 许可证与说明（PyPI 元数据引用）
+include LICENSE
+include README.md
+
+# 测试（仅进入 sdist，不进入 wheel）
+recursive-include tests *.py

@@ -15,6 +15,7 @@ import os
 
 __version__ = "0.1.0"
 ENGINE_VERSION = "v0.1"
+ENGINE_NAME = "aliceADV"
 
 # 引擎（模板）目录标记：存在该文件的目录是引擎模板本身，禁止对其直接 build。
 ENGINE_MARKER = ".aliceadv_engine"
@@ -45,4 +46,5 @@ __all__ = [
     "template_path",
     "__version__",
     "ENGINE_VERSION",
+    "ENGINE_NAME",
 ]

@@ -123,8 +123,10 @@
     },
 
     "panel": {
-        "_comment": "游戏内浮层面板（菜单/侧栏）停靠方向。left=左侧栏，right=右侧栏。构建时转换为 .ingame-menu 的 CSS 定位。",
-        "side": "right"
+        "_comment": "游戏内暂停菜单（点击舞台底部「菜单」弹出的浮层）配置。side=停靠方向(left/right/center)；width=窗口宽(px，相对 screen.designWidth 转比例)；height=窗口高(px，可选，相对 screen.designHeight，缺省为整屏高)；buttons=按钮顺序（键同 sidebar，另含 title=回到首页、back=返回/关闭浮层）。",
+        "side": "right",
+        "width": 500,
+        "buttons": ["save", "load", "settings", "chapters", "gallery", "about", "title", "back"]
     },
 
     "notifyYpos": 68,
@@ -132,8 +134,7 @@
 
     "info": {
         "name":           "Example Game",
-        "version":        "1.0.0",
-        "engine":         "aliceADV-v0.1"
+        "version":        "1.0.0"
     },
     "about": "本程序使用了由若干许可证授权的免费软件。\naliceADV 是一个参考 Ren'Py 设计语言的 ADV 游戏引擎示例。",
 
@@ -149,7 +150,7 @@
             "showName":   true,
             "showVersion":true,
             "buttons": [
-                "start", "load", "settings", "chapters", "gallery", "branches", "about", "quit"
+                "start", "continue", "load", "settings", "chapters", "gallery", "branches", "about", "quit"
             ]
         },
         "save": {

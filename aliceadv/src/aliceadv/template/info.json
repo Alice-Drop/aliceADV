@@ -1,5 +1,10 @@
 {
   "name": "Example Game",
   "version": "1.0.0",
-  "engine": "aliceADV-v0.1"
+  "autoSave": true,
+  "quickSave": true,
+  "preload": {
+    "boot": "title",
+    "runtime": ["page", "predict"]
+  }
 }

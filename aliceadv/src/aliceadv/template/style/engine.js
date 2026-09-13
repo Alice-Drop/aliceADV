@@ -39,19 +39,24 @@
         openOverlay("overlay_history");
     }
 
-    function showPage(name) {
+    function showPage(name, opts) {
         if (!name) return;
         // 兼容 "settings" / "page_settings" 两种入参
         const id = name.startsWith("page_") ? name : "page_" + name;
         if (!PAGES.includes(id)) return;
         const prev = state.currentPage;
-        if (id !== state.currentPage) state.history.push(state.currentPage);
+        if (!(opts && opts.noPush) && id !== state.currentPage) state.history.push(state.currentPage);
         PAGES.forEach(p => {
             const node = document.getElementById(p);
             if (!node) return;
             node.classList.toggle("is-active", p === id);
         });
         state.currentPage = id;
+
+        // 运行时预加载：切换页面后台预载目标页背景（info.json preload.runtime 含 "page" 时生效，不阻塞切换）
+        if (global.AliceADVPreload && global.AliceADVTheme) {
+            global.AliceADVPreload.hookPage(id, global.AliceADVTheme.getTheme(), global.AliceADVTheme.getCatalog());
+        }
 
         // 进入存档 / 读档页时刷新槽位内容（读取 localStorage 最新状态）
         if ((id === "page_save" || id === "page_load") && global.AliceADVTheme && global.AliceADVTheme.renderSlots) {
@@ -70,7 +75,7 @@
 
     function goBack() {
         if (state.history.length) {
-            showPage(state.history.pop());
+            showPage(state.history.pop(), { noPush: true });
         }
     }
 
@@ -91,7 +96,7 @@
 
     /* ---------- 1. 统一按钮事件代理 ---------- */
     function onClick(e) {
-        const target = e.target.closest("[data-script], [data-resume], [data-page], [data-action], [data-popup-confirm], [data-popup-cancel], [data-slot-index], .chapter-item, .branch-item, .gallery-item");
+        const target = e.target.closest("[data-script], [data-resume], [data-page], [data-action], [data-popup-confirm], [data-popup-cancel], [data-slot-kind], .chapter-item, .branch-item, .gallery-item");
         if (!target) return;
 
         // 剧本播放（章节条目 / 开始游戏按钮绑定了 data-script）
@@ -121,6 +126,17 @@
             showPopup("popup_quitQuery");
             return;
         }
+        if (target.dataset.action === "continue") {
+            // 首页「继续」：从自动存档恢复进度（自动存档关闭或无存档时按钮已置灰、点击无效）
+            const S = global.AliceADVScript;
+            if (S && S.loadAuto) S.loadAuto();
+            return;
+        }
+        if (target.dataset.action === "back") {
+            // 侧边栏「返回」：关闭当前界面、回到上一步（goBack 弹出 history 栈），不是回首页
+            goBack();
+            return;
+        }
 
         // 浮层确认
         if (target.dataset.popupConfirm != null) {
@@ -138,18 +154,20 @@
             return;
         }
 
-        // 存档槽
-        if (target.dataset.slotIndex != null) {
-            const idx = target.dataset.slotIndex;
+        // 存档槽（系统槽 auto / quick 不参与手动覆盖，普通槽按 kind+index 存取）
+        if (target.dataset.slotKind != null) {
+            const kind = target.dataset.slotKind;
+            const idx = target.dataset.slotIndex != null ? Number(target.dataset.slotIndex) : 0;
             const script = global.AliceADVScript;
             if (state.currentPage === "page_save") {
-                const ok = script && script.save(idx);
+                // 自动 / 快速槽为系统管理，手动保存不可覆盖（点击忽略）
+                if (kind === "auto" || kind === "quick") return;
+                const ok = script && script.saveManual(idx);
                 if (global.AliceADVTheme && global.AliceADVTheme.renderSlots) global.AliceADVTheme.renderSlots();
                 if (ok) showSaveToast();
             } else if (state.currentPage === "page_load") {
-                if (!target.classList.contains("is-empty") && script) {
-                    script.load(idx);
-                }
+                const data = (script && script.getSave) ? script.getSave(kind, idx) : null;
+                if (data && script) script.load(kind, idx);
             }
             return;
         }
@@ -196,8 +214,8 @@
                 break;
             case "save":  showPage("page_save");     break;
             case "load":  showPage("page_load");     break;
-            case "qsave": if (script) { const ok = script.save(0); if (ok) showSaveToast(); } break;
-            case "qload": if (script) script.load(0); break;
+            case "qsave": if (script) { const ok = script.saveQuick(); if (ok) showSaveToast(); } break;
+            case "qload": if (script) script.loadQuick(); break;
         }
     }
 
