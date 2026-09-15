@@ -24,8 +24,29 @@ import re
 from . import ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME, template_path
 from .cssutil import rewrite_css_asset_paths
 
-# 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件）
-IGNORE_PATTERNS = ("dist", ".git", ENGINE_MARKER, "__pycache__", "*.pyc")
+# 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件 / 用户的 dot 文件）
+IGNORE_PATTERNS = ("dist", ".git", ".gitignore", ".workbuddy", ".DS_Store",
+                   ".idea", ".vscode", ENGINE_MARKER, "__pycache__", "*.pyc")
+
+
+def _safe_clear_directory(target):
+    """清空 target 目录下的全部内容，但保留以 '.' 开头的文件/目录（.git / .workbuddy / .DS_Store 等）。
+
+    用于清理构建产物 dist/web：只移除旧的构建文件，绝不误删用户放在 dist/web 下的
+    git 仓库或工具配置等 dot 文件。"""
+    if not os.path.isdir(target):
+        return
+    for name in os.listdir(target):
+        if name.startswith("."):
+            continue
+        p = os.path.join(target, name)
+        try:
+            if os.path.islink(p) or os.path.isfile(p):
+                os.remove(p)
+            else:
+                shutil.rmtree(p)
+        except OSError as e:
+            print("  ! 清理 %s 失败: %s" % (p, e))
 
 
 def rel(v, fallback):
@@ -292,9 +313,9 @@ def build_project(project_dir):
     #    工程根目录只保存内容（theme.json / story / gui / images / audio ...），
     #    网页外壳 index.html 与引擎 style/ 一律从模板装配，不落进工程目录。
     web = os.path.join(project_dir, "dist", "web")
-    if os.path.isdir(web):
-        shutil.rmtree(web)
-    os.makedirs(web)
+    # 仅清理旧构建产物；以 '.' 开头的文件/目录（.git / .workbuddy 等）一律保留，绝不删除。
+    os.makedirs(web, exist_ok=True)
+    _safe_clear_directory(web)
 
     # 5a. 引擎运行时：模板/index.html + 模板/style/ → dist/web/
     tpl = template_path()

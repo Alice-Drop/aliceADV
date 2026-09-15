@@ -397,18 +397,72 @@
         }
     }
 
+    /* ---------- 后台暂停：页面切到后台（隐藏）时暂停全部音频，回到前台仅恢复原本在播的通道 ----------
+       解决「网页退到后台仍播放音乐、甚至出现在系统媒体控件（OS Media Session）」的问题：
+       浏览器会把任意正在播放的 <audio> 自动登记进系统媒体控件，故切后台时必须主动暂停，
+       并显式把 navigator.mediaSession.playbackState 置为 "none" 以清除/阻止系统控件条目；
+       回到前台时只恢复隐藏前确实在播的通道，保留用户主动暂停的意图。 */
+    let _bgAudioPlaying = false;
+    let _bgSfxPlaying = false;
+    let _bgVoicePlaying = false;
+
+    function _pauseForBackground() {
+        _bgAudioPlaying = !!(audio && !audio.paused);
+        _bgSfxPlaying = !!(sfx && !sfx.paused);
+        _bgVoicePlaying = !!(voiceAudio && !voiceAudio.paused);
+        if (audio) { try { audio.pause(); } catch (e) {} }
+        if (sfx) { try { sfx.pause(); } catch (e) {} }
+        if (voiceAudio) { try { voiceAudio.pause(); } catch (e) {} }
+        if (navigator.mediaSession) {
+            try { navigator.mediaSession.playbackState = "none"; } catch (e) {}
+        }
+    }
+
+    function _resumeFromBackground() {
+        if (_bgAudioPlaying && audio) { try { audio.play().catch(() => {}); } catch (e) {} }
+        if (_bgSfxPlaying && sfx) { try { sfx.play().catch(() => {}); } catch (e) {} }
+        if (_bgVoicePlaying && voiceAudio) { try { voiceAudio.play().catch(() => {}); } catch (e) {} }
+        if (navigator.mediaSession && _bgAudioPlaying) {
+            try { navigator.mediaSession.playbackState = "playing"; } catch (e) {}
+        }
+    }
+
+    function _onVisibilityChange() {
+        if (document.hidden) _pauseForBackground();
+        else _resumeFromBackground();
+    }
+
+    if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", _onVisibilityChange);
+    }
+
     /* ---------- 舞台渲染 ---------- */
     function setBg(src, transition) {
         const bg = stageRoot() && stageRoot().querySelector(".stage-bg");
         if (!bg) return;
+        // 当前已在场上显示的背景（上一张，或首张时主题兜底图 roof.png），
+        // 作为新图解码期间的下层兜底，避免 CSS 重解码 new 的瞬间露出 .stage-bg 的蓝紫背景色。
+        const current = state.bg || (function () {
+            const m = (bg.style.backgroundImage || "").match(/url\("?([^"]+?)"?\)/);
+            return m ? m[1] : "";
+        })();
         const apply = () => {
-            bg.style.backgroundImage = src ? `url("${src}")` : "none";
+            if (src) {
+                // 新图在上层、当前图在下层；新图解码期间下层兜底显示，绝不露蓝紫兜底色。
+                // 注意 current 是裸路径，必须各自包成 url(...) 才是合法的多层 background-image，
+                // 否则整条声明会被浏览器丢弃、只剩 background-color（蓝紫）兜底色。
+                bg.style.backgroundImage = `url("${src}")` + (current ? `, url("${current}")` : "");
+                bg.style.backgroundSize = current ? "cover, cover" : "cover";
+                bg.style.backgroundPosition = current ? "center, center" : "center";
+                bg.style.backgroundRepeat = current ? "no-repeat, no-repeat" : "no-repeat";
+            } else {
+                bg.style.backgroundImage = "none";
+            }
             bg.style.opacity = "1";
         };
         if (transition === "fade" && src) {
-            // 绝不把舞台清空：在目标图解码就绪之前，保持当前背景（旧图或主题兜底图）可见，
-            // 就绪后一次性替换（原子切换），因此不会露出 #0d0d10 黑底或兜底色。
-            // 预加载命中（predict / 进舞台开场已解码）时 probe 已完成，同步切换、零等待。
+            // 绝不清空舞台：等待目标图完成（预加载命中则同步），就绪后再揭幕；
+            // 即便 CSS 背景图各自再解码，下层兜底图也已就位，不会闪蓝紫。
             const probe = new Image();
             let done = false;
             const reveal = () => { if (done) return; done = true; apply(); };
