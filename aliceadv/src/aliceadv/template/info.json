@@ -5,6 +5,7 @@
   "quickSave": true,
   "preload": {
     "boot": "title",
-    "runtime": ["page", "predict"]
+    "runtime": ["page", "predict"],
+    "predictLookahead": 20
   }
 }

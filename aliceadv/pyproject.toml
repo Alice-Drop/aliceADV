@@ -37,9 +37,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/aliceadv/engine"
-Repository = "https://github.com/aliceadv/engine"
-Documentation = "https://github.com/aliceadv/engine#readme"
+Homepage = "https://github.com/Alice-Drop/aliceADV"
+Repository = "https://github.com/Alice-Drop/aliceADV"
+Documentation = "https://github.com/Alice-Drop/aliceADV"
 
 [project.optional-dependencies]
 dev = ["pytest", "build", "twine"]

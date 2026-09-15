@@ -25,7 +25,7 @@
     /* ---------- 常量 ---------- */
     var BOOT_TIMEOUT = 12000;      // 启动加载总兜底超时（ms）：超时即放行，不无限卡玩家
     var ASSET_TIMEOUT = 8000;      // 单个资源预加载超时（ms）
-    var PREDICT_LOOKAHEAD = 14;    // predict 向前扫描的指令条数
+    var PREDICT_LOOKAHEAD = 20;    // predict / 进舞台时向前扫描的指令条数（可由 info.preload.predictLookahead 覆盖，上限 200）
 
     /* 已预取过的资源集合（原始路径字符串），避免重复发起请求 */
     var cache = Object.create(null);
@@ -67,7 +67,10 @@
         if (rt == null) rt = ["page", "predict"];
         if (typeof rt === "string") rt = [rt];
         rt = (rt || []).filter(function (k) { return k === "page" || k === "predict"; });
-        return { boot: boot, runtime: rt };
+        var lookahead = pre.predictLookahead;
+        if (typeof lookahead !== "number" || lookahead < 1) lookahead = PREDICT_LOOKAHEAD;
+        else if (lookahead > 200) lookahead = 200; // 上限，防止误配导致无意义的海量预载
+        return { boot: boot, runtime: rt, predictLookahead: lookahead };
     }
 
     /* ---------- 资源收集 ---------- */
@@ -173,13 +176,18 @@
         return new Promise(function (resolve) {
             if (!url || cache[url]) return resolve();
             cache[url] = true;
-            var img = new Image();
-            var settled = false;
-            function done() { if (settled) return; settled = true; img.onload = img.onerror = null; resolve(); }
-            img.onload = done;
-            img.onerror = done;
-            setTimeout(done, ASSET_TIMEOUT);
-            img.src = url;
+        var img = new Image();
+        var settled = false;
+        function done() { if (settled) return; settled = true; img.onload = img.onerror = null; resolve(); }
+        img.onload = function () {
+            // 等待位图解码完成再放行：预加载阶段把图解码好之后，
+            // 进舞台 setBg 首帧即可直接绘制，避免「数据已下载但未解码」的黑闪。
+            if (img.decode) { img.decode().then(done).catch(done); }
+            else done();
+        };
+        img.onerror = done;
+        setTimeout(done, ASSET_TIMEOUT);
+        img.src = url;
         });
     }
 
@@ -249,35 +257,84 @@
         preloadAll(urls);
     }
 
+    /* ---------- 资源收集：跨段视野（horizon） ----------
+     * 从 (seg, idx) 向前扫描 count 条指令，收集四类资源（sfx/voice/bg/char）。
+     * 与 hookPredict 不同的是：它会跟随控制流进入「后续段」，对跳转目标段也扫描 count 条；
+     * 遇到 decide（选项分支）时，会对每个选项的 goto 目标段都执行预载（多分支全部覆盖）。
+     * 用 visited 集合避免 goto/if 环导致的重复扫描。 */
+    function collectHorizon(script, seg, idx, count) {
+        var out = { sfx: [], voice: [], bg: [], char: [] };
+        var visited = Object.create(null);
+        function push(arr, u) { if (u) arr.push(resolveAsset(u)); }
+        function scan(segName, startIdx, budget) {
+            var key = segName + "#" + startIdx;
+            if (visited[key]) return;
+            visited[key] = 1;
+            var list = (script.segments && script.segments[segName]) || [];
+            var n = 0;
+            for (var i = startIdx; i < list.length && n < budget; i++) {
+                var c = list[i];
+                if (!c) { n++; continue; }
+                n++;
+                var cmd = c.cmd;
+                if (cmd === "sound" || cmd === "music") push(out.sfx, c.src);
+                else if (cmd === "voice") push(out.voice, c.src);
+                else if (cmd === "bg" || cmd === "scene") push(out.bg, c.src);
+                else if (cmd === "show") push(out.char, c.src || resolveCharSprite(c.char, c.sprite));
+                // 控制流：跟随后续段一并预载；decide 多分支全部预载
+                if (cmd === "goto" && c.segment) scan(c.segment, 0, budget);
+                else if (cmd === "if") {
+                    if (c.goto) scan(c.goto, 0, budget);
+                    if (c["else"]) scan(c["else"], 0, budget);
+                } else if (cmd === "decide" && c.options) {
+                    (c.options || []).forEach(function (opt) {
+                        if (opt && opt.goto) scan(opt.goto, 0, budget);
+                    });
+                }
+            }
+        }
+        scan(seg, idx, count);
+        return out;
+    }
+
     /* ---------- 运行时 hook：predict 预加载 ----------
-     * 由 script.js advance 在推进时调用，从当前 seg/idx 向前扫描 PREDICT_LOOKAHEAD 条，
-     * 按「音效/音乐（最高）→ 语音 → 场景背景 → 角色立绘」优先级串行预取。
-     * char+sprite 形态的 show 查角色档案（state.chars）解析出立绘 src。 */
+     * 由 script.js advance 在推进时调用，从当前 seg/idx 向前扫描 predictLookahead 条（默认 20），
+     * 并跟随控制流跨入后续段（含 decide 多分支），按「音效/音乐（最高）→ 语音 → 场景背景 → 角色立绘」
+     * 优先级串行预取。音效最易「突变」，故优先级最高。 */
     function hookPredict(script, seg, idx) {
         var strat = getStrategy();
         if (strat.runtime.indexOf("predict") === -1) return;
         if (!script || !script.segments) return;
-        var list = script.segments[seg];
-        if (!list) return;
-        idx = idx || 0;
-
-        var sfxUrls = [], voiceUrls = [], bgUrls = [], charUrls = [];
-        for (var i = idx; i < list.length && i - idx < PREDICT_LOOKAHEAD; i++) {
-            var c = list[i];
-            if (!c) continue;
-            if ((c.cmd === "sound" || c.cmd === "music") && c.src) sfxUrls.push(resolveAsset(c.src));
-            if (c.cmd === "voice" && c.src) voiceUrls.push(resolveAsset(c.src));
-            if ((c.cmd === "bg" || c.cmd === "scene") && c.src) bgUrls.push(resolveAsset(c.src));
-            if (c.cmd === "show") {
-                var src = c.src || resolveCharSprite(c.char, c.sprite);
-                if (src) charUrls.push(resolveAsset(src));
-            }
-        }
+        var h = collectHorizon(script, seg, idx, strat.predictLookahead);
         // 优先级串行：音效/音乐最先发起请求（带宽优先），完成后再语音→背景→立绘。
-        preloadAll(sfxUrls)
-            .then(function () { return preloadAll(voiceUrls); })
-            .then(function () { return preloadAll(bgUrls); })
-            .then(function () { return preloadAll(charUrls); });
+        preloadAll(h.sfx)
+            .then(function () { return preloadAll(h.voice); })
+            .then(function () { return preloadAll(h.bg); })
+            .then(function () { return preloadAll(h.char); });
+    }
+
+    /* ---------- 进舞台开场预加载 ----------
+     * 由 script.js start() / load() 在进入 page_stage 前调用：先显示启动遮罩（转圈圈），
+     * 按 predict 策略预载「开场视野」（当前段 + 后续段/分支前 predictLookahead 条资源），
+     * 全部就绪（或总超时兜底）后再隐藏遮罩、揭示舞台，避免首屏资源未加载而闪烁/空白。
+     * 仅在 runtime 含 "predict" 时生效；predict 关闭则直接放行（与「关闭=逐行惰性加载」一致）。 */
+    async function enterStage(script, seg, idx) {
+        var strat = getStrategy();
+        if (strat.runtime.indexOf("predict") === -1) return;
+        if (!script || !script.segments) return;
+        var h = collectHorizon(script, seg, idx, strat.predictLookahead);
+        var uniq = [];
+        var seen = Object.create(null);
+        h.sfx.concat(h.voice, h.bg, h.char).forEach(function (u) {
+            if (u && !seen[u]) { seen[u] = 1; uniq.push(u); }
+        });
+        if (!uniq.length) return; // 无资源可预载则不弹遮罩，避免无意义闪一下
+        showMask();
+        await Promise.race([
+            preloadAll(uniq),
+            new Promise(function (r) { setTimeout(r, BOOT_TIMEOUT); })
+        ]);
+        hideMask();
     }
 
     /* 查角色档案解析立绘 src（与 script.js showChar 同源逻辑，但从运行时 state 读取已加载档案）。 */
@@ -292,7 +349,7 @@
 
     global.AliceADVPreload = {
         boot: boot, showMask: showMask, hideMask: hideMask, getStrategy: getStrategy,
-        hookPage: hookPage, hookPredict: hookPredict,
+        hookPage: hookPage, hookPredict: hookPredict, enterStage: enterStage,
         preloadAll: preloadAll,
         collectTitle: collectTitle, collectSystem: collectSystem, collectStory: collectStory,
         collectPageAssets: collectPageAssets

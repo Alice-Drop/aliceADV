@@ -405,9 +405,20 @@
             bg.style.backgroundImage = src ? `url("${src}")` : "none";
             bg.style.opacity = "1";
         };
-        if (transition === "fade") {
-            bg.style.opacity = "0";
-            setTimeout(apply, 240);
+        if (transition === "fade" && src) {
+            // 绝不把舞台清空：在目标图解码就绪之前，保持当前背景（旧图或主题兜底图）可见，
+            // 就绪后一次性替换（原子切换），因此不会露出 #0d0d10 黑底或兜底色。
+            // 预加载命中（predict / 进舞台开场已解码）时 probe 已完成，同步切换、零等待。
+            const probe = new Image();
+            let done = false;
+            const reveal = () => { if (done) return; done = true; apply(); };
+            probe.onload = function () {
+                if (probe.decode) probe.decode().then(reveal).catch(reveal);
+                else reveal();
+            };
+            probe.onerror = reveal;
+            probe.src = src;
+            if (probe.complete && probe.naturalWidth > 0) reveal();
         } else apply();
         state.bg = src;
     }
@@ -958,8 +969,8 @@
             applySnap(snap);
             renderHistory();
         }
-        // 读档后预加载接下来将出现的资源（同 advance 的 predict hook，音效优先级最高）
-        if (global.AliceADVPreload) global.AliceADVPreload.hookPredict(state.script, state.seg, state.idx);
+        // 进入舞台前先按策略预载开场视野（含跨段/分支），避免首屏资源未就绪而闪烁
+        if (global.AliceADVPreload) await global.AliceADVPreload.enterStage(state.script, state.seg, state.idx);
         state.waiting = true;
         if (global.AliceADVEngine) global.AliceADVEngine.showPage("page_stage");
         return true;
@@ -1262,6 +1273,8 @@
         state.deciding = false;
         renderHistory();
         renderNvl();
+        // 进舞台前先按策略预载开场视野（显示转圈圈，避免首屏资源未就绪而闪烁）；predict 关闭则跳过
+        if (global.AliceADVPreload) await global.AliceADVPreload.enterStage(state.script, state.seg, state.idx);
         if (global.AliceADVEngine) global.AliceADVEngine.showPage("page_stage");
         advance();
     }

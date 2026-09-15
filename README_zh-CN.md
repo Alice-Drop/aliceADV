@@ -1,6 +1,6 @@
 # AliceADV
 
-[English](./README.md) | 简体中文
+| [English](./README.md) | 简体中文 |
 
 AliceADV 是一款基于网页的 ADV（视觉小说）游戏引擎。它沿用 Ren'Py 的设计语言：用 JSON 描述场景、对话、角色与分支，引擎产出可直接在浏览器运行的静态网页游戏。
 
@@ -19,7 +19,7 @@ AliceADV 是一款基于网页的 ADV（视觉小说）游戏引擎。它沿用 
 
 ## 安装
 
-环境要求：Python >= 3.9。
+环境要求：Python >= 3.6。
 
 从源码安装：
 

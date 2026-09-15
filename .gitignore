@@ -1,3 +1,14 @@
 girls_orbit_project
 .workbuddy
 /废弃
+.DS_Store
+
+# ---- Python build artifacts ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.pytest_cache/

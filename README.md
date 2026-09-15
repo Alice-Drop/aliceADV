@@ -1,6 +1,6 @@
 # AliceADV
 
-English | [简体中文](./README_zh-CN.md)
+| English | [简体中文](./README_zh-CN.md) |
 
 AliceADV is a web-based ADV (visual novel) game engine. It follows the design language of Ren'Py: scenes, dialogue, characters, and branching are described in JSON, and the engine produces a static web game that runs in any browser.
 
@@ -19,7 +19,7 @@ The engine ships as a Python package with a `create` / `build` command-line tool
 
 ## Installation
 
-Requirements: Python >= 3.9.
+Requirements: Python >= 3.6.
 
 Install from source:
 
@@ -70,7 +70,7 @@ After `aliceadv create`, a user project looks like this:
 ```text
 my_game/
 ├── theme.json        # styling + interface text (colors, fonts, sizes, layout)
-├── info.json         # game name, version, engine field
+├── info.json         # game name, version
 ├── story/            # script: chX.json, characters.json, chapters.json
 ├── gui/              # interface images (textbox, buttons, panels, overlays)
 ├── images/           # content images: bg/, char/<id>/
@@ -192,4 +192,4 @@ The fixed design canvas is 1920×1080. `theme.json` values are authored in desig
 
 ## License
 
-No LICENSE file is present in the repository yet. Add one at the repository root to specify the terms.
+Released under the [MIT License](./aliceadv/LICENSE).
