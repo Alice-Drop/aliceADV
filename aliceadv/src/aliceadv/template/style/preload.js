@@ -75,6 +75,27 @@
 
     /* ---------- 资源收集 ---------- */
 
+    /* 引擎 UI 外壳图（chrome）：引擎模板固定自带的界面图片，仅由 CSS 的 url(...)
+     * 引用（文本框背景 / 面板边框 / 按钮背景），既不在 theme.json、也不在剧本里，
+     * 因此预加载器不会从 theme.json / 故事脚本收集到它们——必须在此显式声明。
+     * 这些图体积小、几乎每个页面都用得到，故在启动（boot）时无条件预载，
+     * 避免首屏文本框/面板/按钮因未加载而空白或闪一下。
+     * 路径相对 dist/web 根（与 CSS 中写法一致）；若工程替换了同名图片，路径不变仍生效。
+     * 不要改为「扫描 CSS 的 url()」来收集——那会重复 CSS 信息且运行时解析低效易碎。 */
+    var CHROME_ASSETS = [
+        "gui/textbox.png",
+        "gui/frame.png",
+        "gui/button/idle_background.png",
+        "gui/button/hover_background.png",
+        "gui/button/choice_idle_background.png",
+        "gui/button/choice_hover_background.png"
+    ];
+
+    /* 引擎 UI 外壳图：始终需要，独立于 boot 策略的「标题/系统/剧本」分类。 */
+    function collectChrome() {
+        return CHROME_ASSETS.map(resolveAsset);
+    }
+
     /* 首页素材：pages.title.background + customButtons 的 image/hover。
      * 与 theme.js buildTitlePage 读取的字段一一对应。 */
     function collectTitle(theme) {
