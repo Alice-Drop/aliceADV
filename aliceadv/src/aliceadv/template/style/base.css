@@ -173,7 +173,8 @@ html, body {
 .btn:focus-visible { outline: 2px dashed var(--color-hover); outline-offset: 2px; }
 
 /* 纸感按钮 (idle/hover/selected 三态)
- * 外观由 gui/button/ 下的 Ren'Py 风格背景图负责（与 renpy 图片目录兼容）。 */
+ * 外观图片由 theme.json 的 button.idle / button.hover 指定（Ren'Py 风格背景图），
+ * 经 theme.js 写入 --gui-button-* 变量；CSS 只引用变量，不写死路径。 */
 .paper-btn {
     height: calc(var(--design-h) * 64 / 1080);
     min-width: calc(var(--design-w) * 280 / 1920);
@@ -185,14 +186,14 @@ html, body {
     padding-left: calc(var(--design-w) * 40 / 1920);
     border: none;
     background-color: transparent;
-    background-image: url("gui/button/idle_background.png");
+    background-image: var(--gui-button-idle);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
 }
 .paper-btn:hover {
     color: var(--color-hover);
-    background-image: url("gui/button/hover_background.png");
+    background-image: var(--gui-button-hover);
 }
 .paper-btn.is-selected { color: var(--color-accent); }
 .paper-btn.is-current { color: var(--color-accent); font-weight: 600; }

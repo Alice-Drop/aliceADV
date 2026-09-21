@@ -26,12 +26,12 @@
     padding: calc(var(--design-h) * 70 / 1080) calc(var(--design-w) * 40 / 1920) calc(var(--design-h) * 30 / 1080);
     box-shadow: calc(var(--design-w) * -12 / 1920) 0 calc(var(--design-w) * 40 / 1920) rgba(0, 0, 0, 0.35);
     background-color: transparent;
-    background-image: url("gui/frame.png");
+    background-image: var(--gui-frame);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
 }
-/* 面板外观由 gui/frame.png 负责，不保留纸感撕裂边 */
+/* 面板外观由 theme.json 的 frame.background 指定，不保留纸感撕裂边 */
 .ingame-menu::before, .ingame-menu::after { display: none; }
 .ingame-menu__title {
     font-family: var(--font-title);

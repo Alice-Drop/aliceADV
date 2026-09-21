@@ -19,10 +19,13 @@ import shutil
 
 from . import ENGINE_MARKER, template_path
 
-# 从模板复制到工程的模板项（只有「内容」：素材 / 剧本 / 配置 / 文档）。
+# 从模板复制到工程的模板项（只有「内容」：素材 / 剧本 / 配置）。
 # 网页外壳 index.html 与引擎运行时 style/ **不进工程目录**——
 # 由 builder 在构建时装配进 dist/web/。这样升级引擎后重新 build 即生效，
 # 工程目录始终只保存内容。
+#
+# 注意：文档**不随工程分发**。引擎文档统一放在仓库 docs/（GitHub Pages 站点），
+# 工程里出现的 documents/ 一律属于作者自建内容，会被 build 排除在产物之外。
 TEMPLATE_ITEMS = [
     "gui",
     "images",
@@ -31,7 +34,6 @@ TEMPLATE_ITEMS = [
     "theme.json",
     "info.json",
     "about.txt",
-    "documents",
 ]
 
 

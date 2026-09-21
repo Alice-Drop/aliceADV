@@ -24,9 +24,12 @@ import re
 from . import ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME, template_path
 from .cssutil import rewrite_css_asset_paths
 
-# 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件 / 用户的 dot 文件）
+# 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件 / 用户的 dot 文件）。
+# documents/：作者自己的说明文档，属于写作资料而非游戏内容，不应随发行版发给玩家
+#（引擎官方文档在仓库 docs/，同样不随包也不随工程分发）。
 IGNORE_PATTERNS = ("dist", ".git", ".gitignore", ".workbuddy", ".DS_Store",
-                   ".idea", ".vscode", ENGINE_MARKER, "__pycache__", "*.pyc")
+                   ".idea", ".vscode", ENGINE_MARKER, "__pycache__", "*.pyc",
+                   "documents")
 
 
 def _safe_clear_directory(target):
@@ -268,6 +271,62 @@ def collect_scripts(project_dir):
     return out
 
 
+def _deep_merge(default, user):
+    """deep merge：默认配置模板(default) + 用户配置(user) → 生效配置。
+
+    合并语义（全编译系统统一，其它语言实现只需照此语义）：
+      - 对象/Map：递归合并；
+      - 数组/List：整体替换，不逐项合并；
+      - 基本类型：用户值覆盖默认值；
+      - 缺字段：保留默认值；
+      - null：视为用户显式提供的值，不因「为空」而恢复默认。
+    """
+    if isinstance(default, dict) and isinstance(user, dict):
+        out = dict(default)
+        for k, v in user.items():
+            # 用户提供即覆盖；双方都是对象时递归，否则以用户值为准
+            out[k] = _deep_merge(out[k], v) if k in out else v
+        return out
+    # 数组整体替换 / 基本类型覆盖 / null 显式置空：一律以用户值为准
+    return user
+
+
+def _read_json(path):
+    """读取 JSON；文件不存在返回 None（由调用方决定回落）。"""
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def resolve_config(project_dir):
+    """计算「生效配置」：引擎默认模板 deep merge 工程配置。
+
+    仅用于配置文件 theme.json / info.json——脚本 / 角色 / 章节等不属于配置，
+    由 build 原样复制到发行版，不在此扫描或处理。
+
+    默认模板 = 引擎 template/ 下的 theme.json / info.json，它同时也是
+    `aliceadv create` 复制进新工程的模板，因此是「默认值 + 工程模板」的单一来源，
+    不存在第二份「推荐字段」清单。
+
+    返回 (theme, info)：均为合并后的完整配置，不再区分用户值 / 默认值；
+    运行时只读这份结果。info 另并入 theme.info（运行时读 theme.info）。
+    """
+    tpl = template_path()
+
+    theme = _deep_merge(
+        _read_json(os.path.join(tpl, "theme.json")) or {},
+        _read_json(os.path.join(project_dir, "theme.json")) or {},
+    )
+    info = _deep_merge(
+        _read_json(os.path.join(tpl, "info.json")) or {},
+        _read_json(os.path.join(project_dir, "info.json")) or {},
+    )
+    # info.json 仍是 theme.info 的来源：把完整 info 并入 theme.info
+    theme["info"] = _deep_merge(theme.get("info", {}) or {}, info)
+    return theme, info
+
+
 def build_project(project_dir):
     project_dir = os.path.abspath(project_dir)
     if not os.path.isdir(project_dir):
@@ -281,26 +340,17 @@ def build_project(project_dir):
         print("    aliceadv build ../my_game")
         return False
 
-    # 1. 读取用户配置 theme.json
+    # 1. 生效配置 = 引擎默认模板 deep merge 工程配置（theme.json / info.json）
+    #    （剧本 / 角色 / 章节不属于配置，后面由 build 原样复制，不在此合并）
     theme_path = os.path.join(project_dir, "theme.json")
     if not os.path.isfile(theme_path):
         print("✗ 工程目录缺少 theme.json: " + theme_path)
         return False
-    with open(theme_path, "r", encoding="utf-8") as f:
-        theme = json.load(f)
-
-    # 2. 合并 info.json（游戏名 / 版本等）覆盖 theme.info
-    info_path = os.path.join(project_dir, "info.json")
-    if os.path.isfile(info_path):
-        try:
-            info = json.load(open(info_path, "r", encoding="utf-8"))
-            base = theme.get("info", {}) or {}
-            for k, v in info.items():
-                if v is not None:
-                    base[k] = v
-            theme["info"] = base
-        except Exception as e:
-            print("! 读取 info.json 失败，已跳过:", e)
+    try:
+        theme, info = resolve_config(project_dir)
+    except Exception as e:
+        print("✗ 读取/合并配置失败:", e)
+        return False
 
     # 3. 生成构建 CSS 变量 + 浮层面板停靠方向
     css = build_css_vars(theme)
@@ -338,6 +388,12 @@ def build_project(project_dir):
     shutil.copytree(project_dir, web,
                     ignore=shutil.ignore_patterns(*IGNORE_PATTERNS, *ENGINE_RUNTIME),
                     dirs_exist_ok=True)
+
+    # 5b-2. 把「生效配置」写入发行版：运行时只读产物里的最终配置，
+    #       不需要知道工程配置与引擎默认配置的关系（覆盖从工程复制来的原始文件）。
+    for _name, _data in (("theme.json", theme), ("info.json", info)):
+        with open(os.path.join(web, _name), "w", encoding="utf-8") as _f:
+            json.dump(_data, _f, ensure_ascii=False, indent=2)
 
     # 5b. 字体 @font-face（字体加载机制）：把 theme.json 中声明了 src 的字体
     #     生成为 style/fonts.built.css；随后紧跟的「CSS 资源路径重写」会把它

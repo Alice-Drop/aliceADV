@@ -21,7 +21,7 @@
     /* 浮层层级高于页面，确保边框不被遮挡 */
     z-index: 101;
     background-color: transparent;
-    background-image: url("gui/frame.png");
+    background-image: var(--gui-frame);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;

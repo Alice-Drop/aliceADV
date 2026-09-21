@@ -13,7 +13,7 @@
     flex-direction: column;
     padding: calc(var(--design-h) * 36 / 1080) calc(var(--design-w) * 70 / 1920) calc(var(--design-h) * 26 / 1080);
     background-color: transparent;
-    background-image: url("gui/frame.png");
+    background-image: var(--gui-frame);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;

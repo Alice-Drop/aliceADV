@@ -15,6 +15,7 @@ AliceADV 是一款基于网页的 ADV（视觉小说）游戏引擎。它沿用 
 - [剧本概览](#剧本概览)
 - [Ren'Py 迁移](#renpy-迁移)
 - [架构说明](#架构说明)
+- [版本管理](#版本管理)
 - [文档](#文档)
 
 ## 安装
@@ -39,7 +40,7 @@ pip install -e ./aliceadv
 aliceadv --version
 ```
 
-命令输出 `aliceADV 0.1.0 (engine v0.1)`。
+命令输出包版本与引擎展示版本，两者同源（`aliceadv/src/aliceadv/_version.py`），因此始终一致，形如 `aliceADV 1.2.3 (engine v1.2.3)`。
 
 ## 快速开始
 
@@ -70,13 +71,14 @@ aliceadv --version
 ```text
 my_game/
 ├── theme.json        # 样式与界面文本（颜色、字体、字号、布局）
-├── info.json         # 游戏名、版本、引擎字段
+├── info.json         # 游戏名、版本、存档开关、预加载策略
 ├── story/            # 剧本：chX.json、characters.json、chapters.json
 ├── gui/              # 界面图片（文本框、按钮、面板、浮层）
 ├── images/           # 内容图片：bg/、char/<角色id>/
-├── audio/            # 音乐与音效
-└── documents/        # 文档副本
+└── audio/            # 音乐与音效
 ```
+
+工程目录只保存内容。文档不会复制进工程，见 [文档](#文档)。
 
 `index.html` 外壳与引擎运行时 `style/` **不**存放在工程目录中。它们在构建时从引擎模板装配进产物。这让工程只保存内容，升级引擎后重新构建即可生效。
 
@@ -93,7 +95,7 @@ my_game/
 
 ### aliceadv create
 
-把模板内容（`gui/`、`images/`、`audio/`、`story/`、`theme.json`、`info.json`、`about.txt`、`documents/`）复制到目标目录。
+把模板内容（`gui/`、`images/`、`audio/`、`story/`、`theme.json`、`info.json`、`about.txt`）复制到目标目录。
 
 | 参数 | 类型 | 必填 | 说明 | 默认值 |
 |---|---|---|---|---|
@@ -163,7 +165,7 @@ my_game/
 
 分支通过变量与条件实现：某段可 `goto` 另一段，构成剧情图（story graph）；两条分支可在共享段汇合。共享段内的细微差异有两种轻量写法——在 `say` 文本内使用行内 `{if ...}`，或为单条指令添加 `if` 字段（条件不满足时该指令被跳过）。
 
-完整指令参考（字段表、默认值、示例与限制）见 `documents/指令.md`。精确规格 `剧本格式说明.md` 位于 `aliceadv/template/documents/` 与你的工程 `documents/` 中。
+完整指令参考（字段表、默认值、示例与限制）见 `docs/指令.md`；剧本 JSON 的精确规格见 `docs/剧本格式说明.md`。两者都发布在 <https://alice-drop.github.io/aliceADV/>。
 
 ## Ren'Py 迁移
 
@@ -176,18 +178,58 @@ my_game/
 
 ## 架构说明
 
-包结构将**引擎模板**（纯数据：`index.html`、`style/`、`gui/`、`story/`、`images/`、`audio/`、`documents/`）与**编译器实现**（`creator.py`、`builder.py`、`cli.py`、`cssutil.py`）分离。模板不含任何 Python 代码。
+包结构将**引擎模板**（纯数据：`index.html`、`style/`、`gui/`、`story/`、`images/`、`audio/`、`theme.json`、`info.json`、`about.txt`）与**编译器实现**（`creator.py`、`builder.py`、`cli.py`、`cssutil.py`）分离。模板不含任何 Python 代码，也不含文档。
 
 此分离是刻意的：若未来用其他语言重写编译器，可直接复用同一份 `template/` 目录与相同的 CLI 语义，无需改动模板内容。模板位置可通过环境变量 `ALICEADV_TEMPLATE` 覆盖，指向任意模板目录。
 
 固定设计画布为 1920×1080。`theme.json` 中的数值按设计像素书写，或以相对值（0–1）书写、由构建翻译为 CSS。
 
+## 版本管理
+
+引擎版本号只写在一处：
+
+```
+aliceadv/src/aliceadv/_version.py      __version__ = "x.y.z"
+```
+
+其余位置全部由它派生。`pyproject.toml` 声明 `dynamic = ["version"]` 并读取同一个属性，因此包版本（`pip show aliceadv`、PyPI 上的版本）不可能与源码不一致。`aliceadv/__init__.py` 由它派生 `ENGINE_VERSION = "v" + __version__`，`builder.py` 在构建时把它注入产物的 `window.__ENGINE__`，`aliceadv --version` 输出 `aliceADV x.y.z (engine vx.y.z)`。
+
+改版本就是改那一行，别的地方都不用动，改完重新构建需要带上新版本的工程即可。`pyproject.toml`、`__init__.py`、注入的 `window.__ENGINE__` 与 `aliceadv --version` 都跟着走。
+
+`aliceadv/tests/test_version.py` 负责守住这个不变量，防止它退化：仓库其它文件重新出现版本号字面量、`pyproject.toml` 不再用 `dynamic`、或 `__init__.py` 不再派生 `ENGINE_VERSION`，都会失败。可直接运行，也可被 pytest 收集：
+
+```bash
+python aliceadv/tests/test_version.py
+```
+
+`_version.py` 需保持零依赖、单条赋值：setuptools 构建时静态解析该行，不导入包。完整说明见 [`docs/编译原理.md` §5](docs/编译原理.md)。
+
+游戏版本（玩家看到的自己游戏的版本）是另一回事，写在工程的 `info.json`；引擎版本从不按工程配置。
+
 ## 文档
 
-- `documents/指令.md` —— 指令手册（中文）：每条指令的用途、字段、示例与限制。
-- `aliceadv/template/documents/剧本格式说明.md` 与工程 `documents/剧本格式说明.md` —— 精确规格：字段类型、默认值与边界。
-- `girls_orbit_project/` —— 从 Ren'Py 演示项目移植的样例工程，含真实剧本、`theme.json` 与分支。
+引擎的全部文档位于本仓库 `docs/` 目录，并以文档站形式发布：<https://alice-drop.github.io/aliceADV/>。
+
+- `docs/index.md` —— 索引与五分钟上手。
+- `docs/指令.md` —— 指令手册：每条指令的用途、字段、示例与限制。
+- `docs/剧本格式说明.md` —— 剧本 JSON 的精确规格：字段类型、默认值与边界。
+- `docs/样式控制.md` / `docs/信息配置.md` —— `theme.json` / `info.json` 配置手册。
+- `docs/编译原理.md` —— `aliceadv build` 的构建流程。
+- `docs/定义.md` —— 引擎总览：两层结构、目录与资源约定。
+- `docs/先进脚本设计.md` —— 尚未实现的候选脚本格式（设计笔记）。
+- `docs/renpy文档.md` —— Ren'Py GUI 文档，迁移时的参考资料。
+
+文档**不**随 `aliceadv` 包分发，`aliceadv create` 也不会把它复制进工程。`example_project/` 是样例工程，含真实剧本、`theme.json` 与分支。
+
+### 发布文档站
+
+文档站由 GitHub Pages 直接从本仓库发布。仓库设置：
+
+- **Settings → Pages → Build and deployment → Source: Deploy from a branch**
+- **Branch 选 `main`**，**folder 选 `/docs`**
+
+推送后 Jekyll 会渲染 `docs/` 下的 Markdown，无需构建步骤或 CI 工作流。
 
 ## 许可证
 
-仓库目前尚未包含 LICENSE 文件。如需指定授权条款，请在仓库根目录添加该文件。
+本项目以 [MIT License](./aliceadv/LICENSE) 发布。

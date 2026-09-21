@@ -135,7 +135,7 @@
     flex-direction: column;
     justify-content: var(--dialogue-justify, center);
     background-color: transparent;
-    background-image: url("gui/textbox.png");
+    background-image: var(--gui-textbox);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
@@ -148,7 +148,7 @@
     opacity: 1;
     visibility: visible;
 }
-/* 默认对话框外观由 gui/textbox.png 负责，不保留纸感撕裂边 */
+/* 默认对话框图片由 theme.json 的 dialog.background 指定（--gui-textbox），不保留纸感撕裂边 */
 .textbox::before, .textbox::after { display: none; }
 .textbox__name {
     position: absolute;
@@ -215,7 +215,7 @@
     cursor: pointer;
     border: none;
     background-color: transparent;
-    background-image: url("gui/button/choice_idle_background.png");
+    background-image: var(--gui-choice-idle);
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
@@ -224,7 +224,7 @@
 .choice:hover {
     color: var(--color-hover);
     transform: translateX(4px);
-    background-image: url("gui/button/choice_hover_background.png");
+    background-image: var(--gui-choice-hover);
 }
 .choice.is-visited { color: var(--color-accent); opacity: 0.6; }
 

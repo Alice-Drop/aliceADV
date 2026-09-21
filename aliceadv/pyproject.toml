@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aliceadv"
-version = "0.2.2"
+# 版本不写在这里：唯一来源是 src/aliceadv/_version.py 的 __version__，
+# 由下面的 [tool.setuptools.dynamic] 读取。改版本只需编辑那一行。
+dynamic = ["version"]
 description = "aliceADV — a Ren'Py-style web ADV (visual novel) game engine: project template + create/build compiler"
 readme = "README.md"
 requires-python = ">=3.6"
@@ -47,10 +49,15 @@ dev = ["pytest", "build", "twine"]
 [project.scripts]
 aliceadv = "aliceadv.cli:main"
 
-# 模板（index.html / style / gui / images / audio / story / documents 等）
-# 是纯数据，与编译器实现解耦：将来用其他语言重写编译器时直接复用该目录。
+# 模板（index.html / style / gui / images / audio / story 等）是纯数据，
+# 与编译器实现解耦：将来用其他语言重写编译器时直接复用该目录。
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# 包版本的唯一来源：src/aliceadv/_version.py 的 __version__。
+# 该文件保持「零依赖 + 单条赋值」，setuptools 会静态解析它，不 import 包。
+[tool.setuptools.dynamic]
+version = { attr = "aliceadv._version.__version__" }
 
 [tool.setuptools]
 include-package-data = true

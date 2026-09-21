@@ -1,0 +1,10 @@
+title: aliceADV 文档
+description: aliceADV 网页 ADV 引擎的中文文档
+theme: minima
+
+plugins:
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: false

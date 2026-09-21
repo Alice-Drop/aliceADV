@@ -15,6 +15,7 @@ The engine ships as a Python package with a `create` / `build` command-line tool
 - [Script overview](#script-overview)
 - [Ren'Py migration](#renpy-migration)
 - [Architecture notes](#architecture-notes)
+- [Versioning](#versioning)
 - [Documents](#documents)
 
 ## Installation
@@ -39,7 +40,9 @@ Verify:
 aliceadv --version
 ```
 
-The command prints `aliceADV 0.1.0 (engine v0.1)`.
+The command prints the package version and the engine display version — both come from a
+single source (`aliceadv/src/aliceadv/_version.py`), so they always agree, e.g.
+`aliceADV 1.2.3 (engine v1.2.3)`.
 
 ## Quick start
 
@@ -74,9 +77,10 @@ my_game/
 ├── story/            # script: chX.json, characters.json, chapters.json
 ├── gui/              # interface images (textbox, buttons, panels, overlays)
 ├── images/           # content images: bg/, char/<id>/
-├── audio/            # music and sound effects
-└── documents/        # documentation copies
+└── audio/            # music and sound effects
 ```
+
+A project contains content only. Documentation is not copied into projects; see [Documents](#documents).
 
 The `index.html` shell and the engine runtime `style/` are **not** stored in the project. They are assembled from the engine template at build time. This keeps the project limited to content, so upgrading the engine takes effect by rebuilding.
 
@@ -93,7 +97,7 @@ The engine template itself lives in `aliceadv/template/` (part of the package). 
 
 ### aliceadv create
 
-Copies the template content (`gui/`, `images/`, `audio/`, `story/`, `theme.json`, `info.json`, `about.txt`, `documents/`) into the target directory.
+Copies the template content (`gui/`, `images/`, `audio/`, `story/`, `theme.json`, `info.json`, `about.txt`) into the target directory.
 
 | Argument | Type | Required | Description | Default |
 |---|---|---|---|---|
@@ -163,7 +167,7 @@ Common instructions:
 
 Branching uses variables and conditions. A segment can `goto` another segment, forming a story graph; two branches may converge on a shared segment. Small differences in a shared segment are expressed either as an inline `{if ...}` inside `say` text, or as an `if` field on a single instruction (the instruction is skipped when its condition is false).
 
-For the complete instruction reference (field tables, defaults, examples, and limits), see `documents/指令.md`. The precise specification `剧本格式说明.md` is in `aliceadv/template/documents/` and in your project's `documents/`.
+For the complete instruction reference (field tables, defaults, examples, and limits), see `docs/指令.md`. The precise specification of the script JSON is `docs/剧本格式说明.md`. Both are published at <https://alice-drop.github.io/aliceADV/>.
 
 > Note: the instruction manual is currently written in Chinese. An English version is planned.
 
@@ -178,17 +182,62 @@ They cover the common Ren'Py mapping (`label` / `jump` / `menu` / `$` / `default
 
 ## Architecture notes
 
-The package separates the **engine template** (pure data: `index.html`, `style/`, `gui/`, `story/`, `images/`, `audio/`, `documents/`) from the **compiler implementation** (`creator.py`, `builder.py`, `cli.py`, `cssutil.py`). The template contains no Python code.
+The package separates the **engine template** (pure data: `index.html`, `style/`, `gui/`, `story/`, `images/`, `audio/`, `theme.json`, `info.json`, `about.txt`) from the **compiler implementation** (`creator.py`, `builder.py`, `cli.py`, `cssutil.py`). The template contains no Python code, and carries no documentation.
 
 This separation is deliberate: if the compiler is later rewritten in another language, the same `template/` directory and CLI semantics can be reused without touching template content. The template location can be overridden with the `ALICEADV_TEMPLATE` environment variable, which points at any template directory.
 
 The fixed design canvas is 1920×1080. `theme.json` values are authored in design pixels or as relative values (0–1) that the build translates into CSS.
 
+## Versioning
+
+The engine version is written in exactly one place:
+
+```
+aliceadv/src/aliceadv/_version.py      __version__ = "x.y.z"
+```
+
+Everything else derives from it. `pyproject.toml` declares `dynamic = ["version"]` and reads that same attribute, so the package version (`pip show aliceadv`, PyPI) can never drift from the source. `aliceadv/__init__.py` derives `ENGINE_VERSION = "v" + __version__`, which `builder.py` injects into the built `index.html` as `window.__ENGINE__`, and which `aliceadv --version` prints as `aliceADV x.y.z (engine vx.y.z)`.
+
+To cut a new version, edit that one line and nothing else, then rebuild the projects that
+should pick it up. `pyproject.toml`, `__init__.py`, the injected `window.__ENGINE__` and
+`aliceadv --version` all follow from it.
+
+`aliceadv/tests/test_version.py` guards the invariant so it cannot decay: it fails if a
+version literal reappears elsewhere in the repository, if `pyproject.toml` stops using
+`dynamic`, or if `__init__.py` stops deriving `ENGINE_VERSION`. Run it directly or through
+pytest:
+
+```bash
+python aliceadv/tests/test_version.py
+```
+
+Keep `_version.py` free of imports and function calls: setuptools parses that line statically instead of importing the package at build time. Full details in [`docs/编译原理.md` §5](docs/编译原理.md).
+
+Game version (what the player sees for your own game) is separate and lives in the project's `info.json`; engine version is never configured per project.
+
 ## Documents
 
-- `documents/指令.md` — instruction manual (Chinese): every instruction with purpose, fields, examples, and limits.
-- `aliceadv/template/documents/剧本格式说明.md` and your project's `documents/剧本格式说明.md` — precise specification: field types, defaults, and boundaries.
-- `girls_orbit_project/` — a sample project ported from a Ren'Py demo, showing a real script, `theme.json`, and branching.
+All engine documentation lives in this repository under `docs/` and is published as a documentation site at <https://alice-drop.github.io/aliceADV/>.
+
+- `docs/index.md` — index and five-minute quick start.
+- `docs/指令.md` — instruction manual (Chinese): every instruction with purpose, fields, examples, and limits.
+- `docs/剧本格式说明.md` — precise specification of the script JSON: field types, defaults, and boundaries.
+- `docs/样式控制.md` / `docs/信息配置.md` — configuration manuals for `theme.json` / `info.json`.
+- `docs/编译原理.md` — how `aliceadv build` assembles a project.
+- `docs/定义.md` — engine overview: two-layer structure, directory and asset conventions.
+- `docs/先进脚本设计.md` — design note for an unimplemented alternative script format.
+- `docs/renpy文档.md` — Ren'Py GUI documentation kept as migration reference material.
+
+Documentation is **not** shipped inside the `aliceadv` package, and `aliceadv create` does not copy it into projects. `example_project/` is a sample project showing a real script, `theme.json`, and branching.
+
+### Publishing the docs site
+
+The site is published by GitHub Pages straight from this repository. Repository setting:
+
+- **Settings → Pages → Build and deployment → Source: Deploy from a branch**
+- **Branch: `main`**, **folder: `/docs`**
+
+Jekyll renders the Markdown in `docs/` on push; no build step or CI workflow is required.
 
 ## License
 

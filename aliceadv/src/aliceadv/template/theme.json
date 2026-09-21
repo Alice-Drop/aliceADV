@@ -40,11 +40,14 @@
         "sectionHeading":28
     },
     "frame": {
+        "background":     "gui/frame.png",
         "borders":        [15, 15, 15, 15],
         "confirmBorders": [60, 60, 60, 60],
         "tile":           false
     },
     "button": {
+        "idle":        "gui/button/idle_background.png",
+        "hover":       "gui/button/hover_background.png",
         "borders":     [10, 10, 10, 10],
         "tile":        true,
         "textIdle":    "#5C5757",
@@ -54,6 +57,8 @@
         "height":      64
     },
     "choice": {
+        "idle":       "gui/button/choice_idle_background.png",
+        "hover":      "gui/button/choice_hover_background.png",
         "borders":    [10, 10, 10, 10],
         "idleColor":  "#5C5757",
         "hoverColor": "#3284D6"
@@ -66,6 +71,7 @@
         "rows":   2
     },
     "thumb": {
+        "placeholder": "gui/sample_thumb.png",
         "width":  384,
         "height": 216
     },
@@ -120,6 +126,11 @@
             "height": "6.5em",
             "gap":    "2em"
         }
+    },
+
+    "dialog": {
+        "_comment": "对话框（文本框）外观。background=默认对话框图片；角色可用 characters.json 的 textbox 字段覆盖（缺省继承此处）。",
+        "background": "gui/textbox.png"
     },
 
     "panel": {

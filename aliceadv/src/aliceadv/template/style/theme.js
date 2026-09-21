@@ -231,6 +231,23 @@
         const t = L.toolbar || {};
         setVar("--toolbar-height", t.height != null ? t.height : "6.5em");
         setVar("--toolbar-gap",    t.gap    != null ? t.gap    : "2em");
+
+        // UI 图片（数据驱动）：对话框 / 面板边框 / 按钮背景 / 画廊占位图统一由 theme.json 决定，
+        // 不再硬编码在 CSS 的 url(...) 里。CSS 侧用 var(--gui-*) 引用，此处写入实际路径；
+        // 预加载器 preload.js 也读同一批字段（collectChrome），从此不存在「CSS 有图、预加载看不见」的盲区。
+        const imgVar = (p) => { const u = assetUrl(p); return u ? `url("${u}")` : null; };
+        const dlg = theme.dialog || {};
+        setVar("--gui-textbox", imgVar(dlg.background));
+        const fr = theme.frame || {};
+        setVar("--gui-frame", imgVar(fr.background));
+        const btn = theme.button || {};
+        setVar("--gui-button-idle",  imgVar(btn.idle));
+        setVar("--gui-button-hover", imgVar(btn.hover));
+        const ch = theme.choice || {};
+        setVar("--gui-choice-idle",  imgVar(ch.idle));
+        setVar("--gui-choice-hover", imgVar(ch.hover));
+        const th = theme.thumb || {};
+        setVar("--gui-thumb", imgVar(th.placeholder));
     }
     function camel(s) { return s.replace(/[-_](.)/g, (_, c) => c.toUpperCase()); }
 
@@ -580,7 +597,8 @@
         (CATALOG.gallery || []).forEach(g => {
             const item = el("div", { class: "gallery-item" + (g.locked ? " is-locked" : "") });
             const img = el("div", { class: "gallery-item__img" });
-            if (!g.locked) img.style.backgroundImage = `url("${resolveAsset("gui/sample_thumb.png")}")`;
+            const thumbImg = (theme.thumb && theme.thumb.placeholder) || "";
+            if (!g.locked && thumbImg) img.style.backgroundImage = `url("${assetUrl(thumbImg)}")`;
             item.appendChild(img);
             item.appendChild(el("div", { class: "gallery-item__label", text: g.name }));
             grid.appendChild(item);
@@ -726,6 +744,17 @@
         if (!p) return "";
         if (/^(https?:|data:|\/\/|\/)/.test(p)) return p;
         return p;
+    }
+
+    /* 资源路径 → 绝对 URL（基于 document.baseURI，即 index.html 所在目录）。
+     * 为什么必须转绝对：CSS 变量里的 url() 由「使用该变量的样式表」解析（base.css 在 style/、
+     * stage.css 在 style/pages/，层级不同），内联样式则由「文档」解析——同一个相对路径会得出
+     * 不同结果。统一转成绝对 URL 后，无论在哪层样式表里消费都指向同一张图。 */
+    function assetUrl(p) {
+        const r = resolveAsset(p);
+        if (!r) return "";
+        if (/^(data:|blob:)/.test(r)) return r;
+        try { return new URL(r, document.baseURI).href; } catch (e) { return r; }
     }
 
     /* ---------- 7. 未加载到主题时的友好提示（非写死默认，仅使用说明） ---------- */

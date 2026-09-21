@@ -13,9 +13,17 @@
 # =========================================================
 import os
 
-__version__ = "0.1.0"
-ENGINE_VERSION = "v0.1"
+# 版本号唯一来源：aliceadv/_version.py（改版本只需编辑那一行）。
+# 包版本（pip）由 pyproject.toml 的 [tool.setuptools.dynamic] 读同一个值。
+from ._version import __version__
+
 ENGINE_NAME = "aliceADV"
+
+# 引擎展示版本：产物「关于」页、标题页与命令行 --version 显示的就是它。
+# 默认由包版本加前缀 v 派生，保证全引擎只有一个版本号。
+# 若某次需要让展示版本与包版本脱钩（例如带上 beta 标记），在本行显式覆盖即可，
+# 但那样就产生了第二个版本号，属于例外情况，需在 CHANGELOG 中说明。
+ENGINE_VERSION = "v" + __version__
 
 # 引擎（模板）目录标记：存在该文件的目录是引擎模板本身，禁止对其直接 build。
 ENGINE_MARKER = ".aliceadv_engine"
