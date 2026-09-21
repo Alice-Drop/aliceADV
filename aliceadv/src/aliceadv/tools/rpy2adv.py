@@ -13,6 +13,7 @@
 #   scene NAME [with fade]                  -> scene { src, transition }   (bg 为兼容别名)
 #   show NAME [at left|center|right] [with fade]   -> show { char|src, sprite?, at, transition }
 #   hide NAME [with fade]                   -> hide { char|src, transition }
+#   pause                                   -> pause { }        (等玩家点击，不显示对话框)
 #   pause N                                 -> wait { seconds }
 #   play music "audio/.." [loop|noloop] [fadein N] [volume V]  -> music { src, loop?, fade?, volume? }
 #   play sound "audio/.." [volume V]        -> sound { src, volume? }
@@ -315,7 +316,15 @@ def parse_body(body_lines, vars=None):
             i += 1
             continue
 
-        # ---- pause ----
+        # ---- pause（不带时长）----
+        # Ren'Py 的裸 pause 表示「停在这一拍，等玩家点击」，常用于让一张图单独亮相。
+        # 早期版本漏掉这一条，会导致开场「图片与台词同时出现」——不要删。
+        if re.match(r"^pause$", line):
+            cmds.append({"cmd": "pause"})
+            i += 1
+            continue
+
+        # ---- pause N ----
         m = re.match(r"^pause\s+([0-9]+(?:\.[0-9]+)?)$", line)
         if m:
             cmds.append({"cmd": "wait", "seconds": float(m.group(1))})
