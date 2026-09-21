@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 import re
+import time
 
 from . import ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME, template_path
 from .cssutil import rewrite_css_asset_paths
@@ -328,6 +329,7 @@ def resolve_config(project_dir):
 
 
 def build_project(project_dir):
+    start_time = time.time()
     project_dir = os.path.abspath(project_dir)
     if not os.path.isdir(project_dir):
         print("✗ 工程目录不存在: " + project_dir)
@@ -458,7 +460,10 @@ def build_project(project_dir):
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
 
+    end_time = time.time()
+
     print("✓ aliceADV build 完成")
+    print(f"用时{end_time-start_time}秒")
     print(f"  工程: {project_dir}")
     print(f"  主题: {theme.get('info', {}).get('name', '(未命名)')} "
           f"v{theme.get('info', {}).get('version', '?')}")
