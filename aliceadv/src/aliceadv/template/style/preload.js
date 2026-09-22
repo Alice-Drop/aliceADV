@@ -80,7 +80,9 @@
      * 改为 theme.json 的配置字段（dialog.background、frame.background、button.idle|hover、
      * choice.idle|hover、thumb.placeholder）——与 theme.js 写入 --gui-* 变量的数据源完全一致，
      * 因此这里直接读同一份配置，不再有「CSS 有图、预加载器看不见」的盲区。
-     * 启动（boot）时无条件预载，避免首屏文本框/面板/按钮未加载而空白或闪一下。 */
+     * 启动（boot）时无条件预载，避免首屏文本框/面板/按钮未加载而空白或闪一下。
+     * 注意：本函数只覆盖 theme.json 里的字段。角色专属对话框不在其中，
+     * 由 collectCharTextboxes 单独收集——两者合起来才是完整的「外壳图」集合。 */
     function collectChrome(theme) {
         theme = theme || global.__THEME__ || {};
         var out = [];
@@ -95,6 +97,32 @@
         add(ch.idle); add(ch.hover);
         var th = theme.thumb || {};
         add(th.placeholder);
+        return out;
+    }
+
+    /* 角色专属对话框（characters.json 的 profile.textbox）。
+     * 它与 theme.dialog.background 是同一性质的东西——「剧本第一句台词就要出现的 UI 图」，
+     * 但数据源在角色档案里，不在 theme.json，所以 collectChrome 天生看不到它。
+     * 历史行为：只有 boot="title+story" 时 collectStory 会顺带收到它，而在默认策略
+     * （boot="title"）下这批图完全不在预载集合内 —— 第一次 say 才由 script.js setTextbox
+     * 写内联背景发起请求，玩家会看到对话框图「后到」，即逐行绘出。此处把它并入外壳图集合。
+     * 模板模式（无内联 __SCRIPTS__）回退到运行时已加载的角色档案。 */
+    function collectCharTextboxes(scripts) {
+        var out = [];
+        var seen = Object.create(null);
+        function add(p) {
+            if (!p) return;
+            var u = resolveAsset(p);
+            if (u && !seen[u]) { seen[u] = 1; out.push(u); }
+        }
+        var chars = ((scripts || global.__SCRIPTS__ || {})["story/characters.json"]) || null;
+        if (chars) {
+            for (var id in chars) add((chars[id] || {}).textbox);
+        } else {
+            var S = global.AliceADVScript;
+            var live = (S && S.state && S.state.chars) || {};
+            for (var k in live) add((live[k] || {}).textbox);
+        }
         return out;
     }
 
@@ -195,22 +223,38 @@
 
     /* ---------- 预加载器（隐藏 Image / Audio 触发浏览器加载并缓存） ---------- */
 
-    function preloadImage(url) {
+    /* 已解码位图的强引用（只收「外壳图」这类小集合，见 collectChrome / collectCharTextboxes）。
+     * 浏览器对已解码位图是弱缓存，被回收后再次绘制会重新增量解码，观感就是「图从上往下扫出来」。
+     * 这批图数量少（十位数量级）且几乎每个页面都用，持有一份引用即可保证命中，代价可忽略。
+     * 剧情背景/立绘可达上百张，不常驻解码位图，避免内存膨胀。 */
+    var retained = [];
+    var RETAIN_LIMIT = 64;
+
+    function retain(img, keep) {
+        if (!keep || retained.length >= RETAIN_LIMIT) return;
+        retained.push(img);
+    }
+
+    function preloadImage(url, keep) {
         return new Promise(function (resolve) {
             if (!url || cache[url]) return resolve();
             cache[url] = true;
-        var img = new Image();
-        var settled = false;
-        function done() { if (settled) return; settled = true; img.onload = img.onerror = null; resolve(); }
-        img.onload = function () {
-            // 等待位图解码完成再放行：预加载阶段把图解码好之后，
-            // 进舞台 setBg 首帧即可直接绘制，避免「数据已下载但未解码」的黑闪。
-            if (img.decode) { img.decode().then(done).catch(done); }
-            else done();
-        };
-        img.onerror = done;
-        setTimeout(done, ASSET_TIMEOUT);
-        img.src = url;
+            var img = new Image();
+            var settled = false;
+            function done() { if (settled) return; settled = true; img.onload = img.onerror = null; resolve(); }
+            img.onload = function () {
+                // 等待位图解码完成再放行：预加载阶段把图解码好之后，
+                // 进舞台 setBg 首帧即可直接绘制，避免「数据已下载但未解码」的黑闪。
+                if (img.decode) {
+                    img.decode().then(function () { retain(img, keep); done(); }).catch(done);
+                } else {
+                    retain(img, keep);
+                    done();
+                }
+            };
+            img.onerror = done;
+            setTimeout(done, ASSET_TIMEOUT);
+            img.src = url;
         });
     }
 
@@ -231,13 +275,14 @@
     }
 
     /* 批量预加载：按扩展名分发到图片/音频加载器；未知扩展名默认按图片处理。
-     * 任一失败/超时都不影响其它（均 resolve，绝不 reject）。 */
-    function preloadAll(urls) {
+     * 任一失败/超时都不影响其它（均 resolve，绝不 reject）。
+     * keep=true 时保留已解码位图 —— 只用于「外壳图」小集合。 */
+    function preloadAll(urls, keep) {
         if (!urls || !urls.length) return Promise.resolve();
         return Promise.all(urls.map(function (u) {
             if (!u) return Promise.resolve();
             if (AUDIO_EXT.test(u)) return preloadAudio(u);
-            return preloadImage(u);
+            return preloadImage(u, keep);
         }));
     }
 
@@ -258,16 +303,20 @@
         if (strat.boot === "title+story") {
             urls = urls.concat(collectStory(theme, scripts));
         }
-        // UI 外壳图（文本框/边框/按钮）：任何 boot 策略下都始终需要，随手一并预载
-        urls = urls.concat(collectChrome(theme));
+        // UI 外壳图（文本框/边框/按钮）+ 角色专属对话框：任何 boot 策略下都始终需要。
+        // 后者来自 characters.json 的 profile.textbox，不是 theme.json 字段
+        // （见 collectCharTextboxes）；早先因此漏掉预载，第一次 say 才发起请求。
+        var chrome = collectChrome(theme).concat(collectCharTextboxes(scripts));
+
         // 去重
         var uniq = [];
         var seen = Object.create(null);
-        urls.forEach(function (u) { if (u && !seen[u]) { seen[u] = 1; uniq.push(u); } });
+        urls.concat(chrome).forEach(function (u) { if (u && !seen[u]) { seen[u] = 1; uniq.push(u); } });
 
-        // 总超时兜底：即便个别资源未就绪也不无限卡住玩家
+        // 总超时兜底：即便个别资源未就绪也不无限卡住玩家。
+        // 外壳图先跑且 keep=true（保留已解码位图），其余资源随后从缓存命中补齐。
         await Promise.race([
-            preloadAll(uniq),
+            preloadAll(chrome, true).then(function () { return preloadAll(uniq); }),
             new Promise(function (r) { setTimeout(r, BOOT_TIMEOUT); })
         ]);
         hideMask();
@@ -352,13 +401,16 @@
         var seen = Object.create(null);
         function push(u) { if (u && !seen[u]) { seen[u] = 1; uniq.push(u); } }
         h.sfx.concat(h.voice, h.bg, h.char).forEach(push);
-        // UI 外壳图（文本框/边框/按钮）若尚未被 boot 预载（如 boot="none"），开场时一并补上；
-        // 已缓存的直接跳过，避免只为此弹一次遮罩。
-        collectChrome().forEach(function (u) { if (u && !cache[u]) push(u); });
-        if (!uniq.length) return; // 无资源可预载则不弹遮罩，避免无意义闪一下
+        // UI 外壳图 + 角色专属对话框：若尚未被 boot 预载（如 boot="none"）则开场补上；
+        // 已缓存的直接跳过，避免只为此弹一次遮罩。单独成组是为了 keep=true 保留已解码位图。
+        var chrome = [];
+        collectChrome().concat(collectCharTextboxes()).forEach(function (u) {
+            if (u && !cache[u] && chrome.indexOf(u) === -1) chrome.push(u);
+        });
+        if (!uniq.length && !chrome.length) return; // 无资源可预载则不弹遮罩，避免无意义闪一下
         showMask();
         await Promise.race([
-            preloadAll(uniq),
+            preloadAll(chrome, true).then(function () { return preloadAll(uniq); }),
             new Promise(function (r) { setTimeout(r, BOOT_TIMEOUT); })
         ]);
         hideMask();
@@ -382,6 +434,7 @@
         hookPage: hookPage, hookPredict: hookPredict, enterStage: enterStage,
         preloadAll: preloadAll, getCache: getCache,
         collectTitle: collectTitle, collectSystem: collectSystem, collectStory: collectStory,
-        collectPageAssets: collectPageAssets, collectChrome: collectChrome
+        collectPageAssets: collectPageAssets, collectChrome: collectChrome,
+        collectCharTextboxes: collectCharTextboxes
     };
 })(window);

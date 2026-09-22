@@ -14,6 +14,23 @@
     z-index: 0;
 }
 
+/* 背景转场幕布：仅 bg/scene 带 transition:"fade" 时由 script.js 加 .is-on。
+ * 转场 = 幕布落下（旧图淡出）→ 幕后备好并换图 → 幕布升起（新图淡入）。
+ * 与 .stage-bg 同为 z-index 0，靠 DOM 顺序压在背景之上、立绘层(z-index 1)之下，
+ * 因此立绘与对话框不会跟着一起黑掉。
+ * 淡入淡出时长/幕布颜色的唯一来源就在这里；script.js 读计算值定时，不另写一份时长。
+ * theme.json 的 pages.stage.fadeMs / fadeColor 可覆盖（见样式控制.md）。 */
+#page_stage .stage-fade {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: var(--stage-fade-color, #000);
+    opacity: 0;
+    transition: opacity var(--stage-fade-ms, 400ms) linear;
+    pointer-events: none;
+}
+#page_stage .stage-fade.is-on { opacity: 1; }
+
 /* 立绘层：剧本 show/sprite/hide 指令操作。
  * 站位槽 at-left/at-center/at-right（at 未指定时居中），语义对齐 Ren'Py 的
  * left/center/right 变换：xalign 0.0 / 0.5 / 1.0 且 yalign 1.0（贴底）。

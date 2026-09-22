@@ -6,7 +6,8 @@
  * 剧情按『段 segments』组织；分支判定点用 decide（判定）指令。
  *
  * 指令集：
- *   bg      { src, transition? }                 切换背景（transition: "fade" 等）
+ *   bg      { src, transition? }                 切换背景；transition:"fade" = 黑幕落→换图→黑幕起
+ *                                                 （转场期间阻塞，等价 Ren'Py 的 with fade）
  *   music   { src?, stop?, volume?, fade? }       音乐控制（循环）
  *   sound   { src, volume? }                       音效（一次性，不循环）
  *   stop    { what }                              停止：what = "music" | "sound" | "all"
@@ -14,7 +15,7 @@
  *           - char+sprite：查角色档案 sprites
  *           - src：直接显示一张图片（如 demo 的 creatures），无需角色档案
  *           - at：left / center / right（默认 center）
- *   hide    { char?|src?, transition? }            立绘/图片消失
+ *   hide    { char?|src?, transition? }            立绘/图片消失；不给 char/src = 清空场上全部
  *   sprite  { char, sprite, anim? }               切换立绘/表情
  *   say     { char, text, sprite?, as? }          角色说话（as = 临时显示名）
  *   narrate { text, mode? }                        旁白；mode="nvl" 走 NVL 整屏模式
@@ -24,7 +25,9 @@
  *   goto    { segment }                           跳转到段
  *   set     { var, op?, value? }                  写变量（op: = add sub mul div toggle append；非阻塞）
  *   if      { test|var+op+value, goto?, else? }   条件跳转（命中 goto / 未命中 else / 皆空则继续当前段）
- *   wait    { seconds?|ms? }                       演出等待（可点击跳过）
+ *   pause   { seconds?|ms? }                       纯停顿（不显示对话框）：默认等玩家点击，
+ *                                                 给 seconds/ms 则定时自动继续（点击可跳过）
+ *   wait    { seconds?|ms? }                       演出等待（同 pause 的定时形态，缺省 800ms）
  *   title   { text }                              章节标题卡
  *   end     { action? }                           章节结束（title/chapters）
  *
@@ -75,7 +78,9 @@
         auto: false,
         skip: false,
         autoTimer: null,
-        skipTimer: null
+        skipTimer: null,
+        step: 0                // 推进计数：每调用一次 advance() 递增。
+                               // 异步演出（如背景 fade 的解码回调）据此判断「玩家是否早已把这条推过去」。
     };
 
     /* ---------- DOM 工具 ---------- */
@@ -436,10 +441,69 @@
         document.addEventListener("visibilitychange", _onVisibilityChange);
     }
 
-    /* ---------- 舞台渲染 ---------- */
+    /* ---------- 舞台渲染 ----------
+     * 背景转场：transition:"fade" 等价 Ren'Py 的 with fade ——
+     *   黑幕落下（淡出）→ 幕后备好并换上目标图 → 黑幕升起（淡入）。
+     * 幕布是 .stage-fade 层（theme.js 搭骨架时插在 .stage-bg 之上、.stage-chars 之下），
+     * 所以淡出淡入全程既不会露 .stage-bg 的兜底色，也不会闪出尚未解码的图。
+     * 淡入淡出时长只写在 CSS（stage.css 的 .stage-fade），JS 读计算值，避免两处各写一份。
+     * 转场进行中该指令阻塞（setBg 返回 true），与 Ren'Py 的 with 一致：
+     *   玩家在转场中点一下 = 立即结束转场并推进一句；快进(skip)模式不播转场，直接换图。
+     */
+    let bgSeq = 0;      // 转场令牌：每次 setBg 递增，旧转场的延时回调据此自动作废
+    let bgFade = null;  // 进行中的转场 { seq, step, apply, timer }
+
+    function veilEl() {
+        const root = stageRoot();
+        return root ? root.querySelector(".stage-fade") : null;
+    }
+
+    function bgFadeMs(veil) {
+        const raw = String(global.getComputedStyle(veil).transitionDuration || "").split(",")[0].trim();
+        const n = parseFloat(raw) || 0;
+        return /ms\s*$/.test(raw) ? n : n * 1000;
+    }
+
+    // 目标图就绪（含 CSS 二次解码）。图缺失也要收尾，绝不把玩家留在黑幕里。
+    function decodeImage(src) {
+        return new Promise(resolve => {
+            const probe = new Image();
+            let done = false;
+            const finish = () => { if (done) return; done = true; resolve(); };
+            probe.onload = function () {
+                if (probe.decode) probe.decode().then(finish).catch(finish);
+                else finish();
+            };
+            probe.onerror = finish;
+            probe.src = src;
+            if (probe.complete && probe.naturalWidth > 0) finish();
+        });
+    }
+
+    // 揭幕。只有最新的那次转场有权揭幕：被后续转场接管的旧回调不得动幕布，
+    // 否则会在新转场刚落幕时把幕布撤掉（画面瞬间闪回旧图）。
+    function liftVeil(seq) {
+        requestAnimationFrame(() => {
+            if (seq !== bgSeq) return;
+            const veil = veilEl();
+            if (veil) veil.classList.remove("is-on");
+        });
+    }
+
+    // 转场收尾：换图 + 揭幕 + 放行被阻塞的推进。定时到期与玩家点击都走这里。
+    function settleBgFade(seq) {
+        const f = bgFade;
+        if (!f || (seq != null && f.seq !== seq)) return;
+        bgFade = null;
+        clearTimeout(f.timer);
+        f.apply();
+        liftVeil(f.seq);
+        if (state.playing && state.waiting) { state.waiting = false; advance(); }
+    }
+
     function setBg(src, transition) {
         const bg = stageRoot() && stageRoot().querySelector(".stage-bg");
-        if (!bg) return;
+        if (!bg) return false;
         // 当前已在场上显示的背景（上一张，或首张时主题兜底图 roof.png），
         // 作为新图解码期间的下层兜底，避免 CSS 重解码 new 的瞬间露出 .stage-bg 的蓝紫背景色。
         const current = state.bg || (function () {
@@ -460,21 +524,50 @@
             }
             bg.style.opacity = "1";
         };
-        if (transition === "fade" && src) {
-            // 绝不清空舞台：等待目标图完成（预加载命中则同步），就绪后再揭幕；
-            // 即便 CSS 背景图各自再解码，下层兜底图也已就位，不会闪蓝紫。
-            const probe = new Image();
-            let done = false;
-            const reveal = () => { if (done) return; done = true; apply(); };
-            probe.onload = function () {
-                if (probe.decode) probe.decode().then(reveal).catch(reveal);
-                else reveal();
-            };
-            probe.onerror = reveal;
-            probe.src = src;
-            if (probe.complete && probe.naturalWidth > 0) reveal();
-        } else apply();
-        state.bg = src;
+        // 本场故事的第一张背景：舞台刚从标题页切过来，没有「上一张图」可淡出。
+        // 显式从黑场淡入（而不是让幕布 0→1 落下），否则这一瞬间会露出主题兜底图
+        // （兜底图缺失时就是 .stage-bg 的蓝紫渐变），既难看又依赖浏览器是否给
+        // 「刚由 display:none 变可见的元素」播过渡动画。此处不依赖任何浏览器特性。
+        const fromBlank = state.bg == null;
+        state.bg = src; // 先记状态：下层兜底图 / 快照 / 存档缩略图都以它为准
+        // 本次切换接管转场：作废上一场（换图与揭幕由本次负责，不留悬挂等待）
+        if (bgFade) { clearTimeout(bgFade.timer); bgFade = null; }
+        const seq = ++bgSeq;
+
+        const veil = veilEl();
+        if (transition === "fade" && src && veil && !state.skip) {
+            // 上一场转场尚未揭幕 → 幕布已在位，不必再落一次幕（连点切图时保持黑场，不来回闪）
+            const covered = veil.classList.contains("is-on");
+            if (!covered) {
+                if (fromBlank) {
+                    // 直接落在满幕：临时关掉过渡，结算后再恢复，避免首帧闪出兜底图
+                    veil.style.transition = "none";
+                    veil.classList.add("is-on");
+                    void veil.offsetWidth;
+                    veil.style.transition = "";
+                } else {
+                    veil.classList.add("is-on");
+                }
+            }
+            const t0 = Date.now();
+            const step = state.step; // 本次演出所属的推进步
+            decodeImage(src).then(() => {
+                if (seq !== bgSeq) return; // 期间又切了背景：本次作废
+                if (state.step !== step) {
+                    // 解码期间玩家已点过（转场被跳过）：只把图换上并揭幕，不再拦住推进
+                    apply(); liftVeil(seq); return;
+                }
+                // 帷幕落满 + 图就绪 是两条并行条件，谁慢等谁；
+                // 已在幕中（covered）与首图从黑场淡入（fromBlank）都无需再等落满时长
+                const hold = (covered || fromBlank) ? 0 : Math.max(0, bgFadeMs(veil) - (Date.now() - t0));
+                bgFade = { seq: seq, step: step, apply: apply, timer: setTimeout(() => settleBgFade(seq), hold) };
+                state.waiting = true; // 转场期间阻塞（advance 据此停在本条指令）
+            });
+            return true;
+        }
+        apply();
+        liftVeil(seq);
+        return false;
     }
 
     function nodeId(c) { return c.src ? ("__src__" + c.src) : c.char; }
@@ -576,11 +669,27 @@
 
     function hideChar(c) {
         ensureHideMaps();
-        const id = nodeId(c);
+        // 不给 char / src = 清空场上全部立绘与整屏图（谢幕、切章这类要把画面腾空的场合）。
+        if (!c.char && !c.src) {
+            Object.keys(state.nodeMap).forEach(id => dropChar(id, c.transition));
+            return;
+        }
+        dropChar(nodeId(c), c.transition);
+    }
+
+    // 淡出时长与 .stage-char 的 opacity transition 取同一来源（CSS），不另写一份时长
+    // ——与背景幕布 bgFadeMs 同规矩。
+    function charFadeMs(node) {
+        const raw = String(global.getComputedStyle(node).transitionDuration || "").split(",")[0].trim();
+        const n = parseFloat(raw) || 0;
+        return /ms\s*$/.test(raw) ? n : n * 1000;
+    }
+
+    // 摘掉一个立绘节点。立即从「在场」集合移除（快照/状态立刻反映已隐藏），
+    // 但 DOM 节点的实际删除延迟到下一帧：若同一步内又 show 同一 id，则取消删除、立绘原样保留。
+    function dropChar(id, transition) {
         const node = state.nodeMap[id];
         if (!node) return;
-        // 立即从「在场」集合移除（快照/状态立刻反映已隐藏），
-        // 但 DOM 节点的实际删除延迟到下一帧：若同一步内又 show 同一 id，则取消删除、立绘原样保留。
         delete state.nodeMap[id];
         delete state.charsOnStage[id];
         state.hidingNodes[id] = node;
@@ -588,9 +697,14 @@
             cancelPendingHide(id);
             if (node.parentNode) node.parentNode.removeChild(node);
         };
-        if (c.transition === "fade") {
+        if (transition === "fade") {
+            // 立绘登场默认带 anim-fade（CSS 动画，animation-fill-mode: both）。
+            // CSS 动画的优先级高于 inline style，会一直把 opacity 钉在 1——
+            // 不先停掉动画，这里写的 opacity:0 根本不生效，角色是「啪」地消失而不是淡出。
+            node.style.animation = "none";
+            void node.offsetWidth;           // 先让「停动画」落地，再改 opacity，过渡才有起点
             node.style.opacity = "0";
-            state.hideTimers[id] = setTimeout(remove, 320);
+            state.hideTimers[id] = setTimeout(remove, charFadeMs(node) || 320);
         } else {
             state.hideTimers[id] = setTimeout(remove, 0);
         }
@@ -625,7 +739,10 @@
         const box = root && root.querySelector(".textbox");
         if (!box) return;
         box.classList.add("is-active"); // 有台词才显示对话框
-        // 角色专属对话框图片（可选；不填用默认纸感框）
+        // 角色专属对话框图片（可选；不填则回落到 CSS 的 --gui-textbox）
+        // customBox 是 characters.json 里的原始相对路径，与 preload.js 的 collectCharTextboxes
+        // 收集到的字符串完全相同——内联样式和 new Image() 都以 document.baseURI 解析，
+        // 因此命中同一缓存项。改这里时务必保持该约定，否则预载会落空。
         if (customBox) {
             box.classList.add("textbox--image");
             box.style.backgroundImage = `url("${customBox}")`;
@@ -996,17 +1113,13 @@
             state.script.__path = data.scriptPath;
             state.initVars = state.script.varsInit || {};
         }
-        // 停止当前演出（音频 / 打字机 / 计时器）
-        clearInterval(state.typing); state.typing = null;
-        if (state.typePauseTimer) { clearTimeout(state.typePauseTimer); state.typePauseTimer = null; }
-        if (state.waitTimer) { clearTimeout(state.waitTimer); state.waitTimer = null; }
+        // 停止当前演出并把舞台复位到空白（同 start：进入播放前兜一次，
+        // 读档时舞台上一律先空——否则当前进度里的立绘会与存档快照的立绘叠在一起）
+        stopPlayback();
+        resetStage();
         if (audio) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} }
         if (sfx) { sfx.pause(); }
-        clearInterval(state.autoTimer); clearInterval(state.skipTimer);
-        state.auto = false; state.skip = false;
         state.playing = true;
-        state.deciding = false;
-        state.waiting = false;
         // 恢复运行时状态
         state.vars = JSON.parse(JSON.stringify(data.vars || {}));
         state.names = JSON.parse(JSON.stringify(data.names || {}));
@@ -1066,6 +1179,17 @@
         }
     }
 
+    // 定时等待：阻塞 ms 毫秒后自动继续；期间点击可跳过（见 next）。
+    function beginTimedWait(ms) {
+        state.waiting = true;
+        state.waitTimer = setTimeout(() => {
+            state.waitTimer = null;
+            state.waiting = false;
+            advance();
+        }, ms);
+        return true;
+    }
+
     function exec(c) {
         // 单指令执行条件：不满足则跳过本条（不执行、不阻塞，继续推进）
         if (c.if != null) {
@@ -1074,8 +1198,7 @@
         switch (c.cmd) {
             case "bg":
             case "scene":          // scene 为规范名，bg 保留作兼容别名（二者等价）
-                setBg(c.src, c.transition);
-                return false;
+                return setBg(c.src, c.transition); // 带 fade 时阻塞到转场结束
             case "music":
                 musicCmd(c);
                 return false;
@@ -1112,15 +1235,15 @@
                 state.seg = c.segment;
                 state.idx = -1; // advance 里会 ++
                 return false;
-            case "wait": {
+            case "wait": {         // 演出等待：定时自动继续（点击可跳过）；未给时长按 800ms
                 const ms = c.ms != null ? c.ms : (c.seconds != null ? c.seconds * 1000 : 800);
-                state.waiting = true;
-                state.waitTimer = setTimeout(() => {
-                    state.waitTimer = null;
-                    state.waiting = false;
-                    advance();
-                }, ms);
-                return true;
+                return beginTimedWait(ms);
+            }
+            case "pause": {        // 纯停顿：不显示对话框、不写历史、不占用资源
+                // 无参 = 等玩家点击（让背景/图片单独亮相一拍的节拍指令）；
+                // 带 ms / seconds = 定时自动继续，期间点击可跳过。
+                if (c.ms == null && c.seconds == null) { state.waiting = true; return true; }
+                return beginTimedWait(c.ms != null ? c.ms : c.seconds * 1000);
             }
             case "title":
                 showTitleCard(c.text);
@@ -1226,6 +1349,8 @@
     function next() {
         if (!state.playing) return;
         if (state.deciding) return; // 判定中：只能点选项
+        // 背景转场中点击：立即结束转场（换图 + 揭幕）并推进一句，不必等帷幕落满
+        if (bgFade) { settleBgFade(bgFade.seq); return; }
         // 句中 {w} 等待点击：点击=续打下一截（不整行跳过、不推进下一句）
         if (state.awaitClick) {
             state.awaitClick = false;
@@ -1293,8 +1418,79 @@
         script.varsInit = script.vars ? JSON.parse(JSON.stringify(script.vars)) : {};
     }
 
+    /* ---------- 舞台复位 ----------
+     * 把「上一局留在舞台上的痕迹」一次抹干净：立绘/整屏图（含在途的淡出节点）、
+     * 背景（含 setBg 垫在下层的「上一张图」）、幕布、章节标题卡、NVL、选项、对话框。
+     *
+     * 为什么抽成一个函数、并且「离开舞台」与「进入舞台」两头都调用：
+     *   舞台元素的生命周期跨越「播放中」与「已退出播放」两种状态。若只在 exit() 里清，
+     *   任何一条没走到 exit() 的路径（读档直接进舞台、将来新增的入口、以及
+     *   「已经退出播放、但画面上还留着东西」的中间态）都会让上一次的画面原样留在 stage 上，
+     *   重新开始时立绘/背景就停在退出时的位置。复位做成幂等操作、进入播放前再兜一次，
+     *   就不再依赖「调用方记得清」——等价于 Ren'Py 里「回主菜单再开始必然是一场干净的戏」。
+     */
+    function resetStage() {
+        const root = stageRoot();
+        if (!root) return;
+        // 1. 立绘 / 整屏图：DOM 与索引一起清。「已 hide、等下一帧才移除」的在途节点也要清，
+        //    并撤销它的定时器——否则它会在下一帧冒出来，或永远留在画面上。
+        root.querySelectorAll(".stage-char").forEach(n => n.remove());
+        ensureHideMaps();
+        for (const k in state.hideTimers) clearTimeout(state.hideTimers[k]);
+        state.nodeMap = {};
+        state.hidingNodes = {};
+        state.hideTimers = {};
+        state.charsOnStage = {};
+        // 2. 选项：不清会留在舞台上，而且仍然可点（点到就跳分支）
+        const choices = root.querySelector(".choices");
+        if (choices) { clearNode(choices); choices.classList.remove("is-active"); }
+        // 3. 章节标题卡
+        const card = root.querySelector(".stage-title-card");
+        if (card) card.classList.remove("is-active");
+        // 4. NVL 整屏旁白
+        const nvl = root.querySelector(".stage-nvl");
+        if (nvl) { nvl.classList.remove("is-active"); clearNode(nvl); }
+        state.nvlLines = [];
+        // 5. 对话框：文本、名字、角色专属图框与配色全部还原成「还没说话」的初始态。
+        //    dataset.full 存着整行全文（append 续说靠它拼前缀），不清的话下一局第一句
+        //    append 会把上一局的最后一句当成本句前缀拼上去。
+        hideTextbox();
+        const box = root.querySelector(".textbox");
+        if (box) {
+            box.classList.remove("textbox--image");
+            box.style.backgroundImage = "";
+            box.style.visibility = "";
+            const nEl = box.querySelector(".textbox__name");
+            const tEl = box.querySelector(".textbox__text");
+            if (nEl) { nEl.style.display = "none"; nEl.textContent = ""; nEl.style.color = ""; }
+            if (tEl) { tEl.textContent = ""; tEl.dataset.full = ""; }
+        }
+        // 6. 背景：setBg 为了「解码新图时不露兜底色」会把上一张垫在下层
+        //    （backgroundImage = "url(新图), url(旧图)"）。只换上第一层、不连第二层一起清的话，
+        //    这张旧图会一路活到下一局，重新开始时先露出来的就是它——「退出时那个位置的东西还在」。
+        //    复位到主题兜底背景（theme.js 写在 data-fallback-bg），而不是清空露出 CSS 渐变。
+        const bg = root.querySelector(".stage-bg");
+        if (bg) {
+            bg.style.backgroundImage = bg.dataset.fallbackBg || "";
+            bg.style.backgroundSize = "";
+            bg.style.backgroundPosition = "";
+            bg.style.backgroundRepeat = "";
+            bg.style.opacity = "";
+        }
+        state.bg = null;
+        // 7. 幕布与在途转场：令牌 +1 让所有没跑完的 fade 回调作废，它们不得再改动画。
+        const veil = veilEl();
+        if (veil) veil.classList.remove("is-on");
+        if (bgFade) { clearTimeout(bgFade.timer); bgFade = null; }
+        bgSeq++;
+    }
+
     /* ---------- 生命周期 ---------- */
     async function start(scriptPath) {
+        // 进入播放前先把上一局的痕迹清干净（幂等）：不依赖「退出时一定走过 exit」。
+        // 放在最前面，是为了在任何 await 之前就把画面复位，中途失败也不会留下半场演出。
+        stopPlayback();
+        resetStage();
         if (!state.chars) {
             try { state.chars = await fetchJSON(CHAR_PATH); }
             catch (e) { console.warn("[aliceADV] 角色档案加载失败", e); state.chars = {}; }
@@ -1325,6 +1521,7 @@
         state.playing = true;
         state.waiting = false;
         state.deciding = false;
+        state.step = 0;
         renderHistory();
         renderNvl();
         // 进舞台前先按策略预载开场视野（显示转圈圈，避免首屏资源未就绪而闪烁）；predict 关闭则跳过
@@ -1333,20 +1530,30 @@
         advance();
     }
 
-    function exit() {
-        state.playing = false;
-        state.waiting = false;
-        state.deciding = false;
-        hideTextbox(); // 退出播放时收起对话框
+    /* ---------- 演出停机 ----------
+     * 停掉「正在跑」的一切：打字机、句中/定时等待、自动与快进。
+     * exit（离开舞台）与 start / load（进入舞台）共用同一个停机动作——
+     * 上一局的定时器不能跟着走到下一局（否则新一局会被上局的 auto/skip 继续推着跑）。
+     */
+    function stopPlayback() {
         clearInterval(state.typing);
         clearInterval(state.autoTimer);
         clearInterval(state.skipTimer);
+        if (state.typePauseTimer) { clearTimeout(state.typePauseTimer); state.typePauseTimer = null; }
         if (state.waitTimer) { clearTimeout(state.waitTimer); state.waitTimer = null; }
         state.typing = state.autoTimer = state.skipTimer = state.typePauseTimer = null;
         state.awaitClick = false;
         state.typeParts = null; state.typeSi = 0; state.typeCi = 0; state.typePrefix = "";
         state.auto = false;
         state.skip = false;
+        state.waiting = false;
+        state.deciding = false;
+    }
+
+    function exit() {
+        state.playing = false;
+        stopPlayback();
+        hideTextbox(); // 退出播放时收起对话框
         // 清空历史与变量（退出播放即清除；变量为游玩期有效）
         state.history = [];
         state.vars = {};
@@ -1355,33 +1562,8 @@
         if (audio) { audio.pause(); try { audio.currentTime = 0; } catch (e) {} }
         if (sfx) { sfx.pause(); try { sfx.currentTime = 0; } catch (e) {} }
         state.music = null;
-        // 清舞台
-        const root = stageRoot();
-        if (root) {
-            root.querySelectorAll(".stage-char").forEach(n => n.remove());
-            if (state.hideTimers) { for (const k in state.hideTimers) clearTimeout(state.hideTimers[k]); }
-            state.nodeMap = {};
-            state.hidingNodes = {};
-            state.hideTimers = {};
-            state.charsOnStage = {};
-            const choices = root.querySelector(".choices");
-            if (choices) clearNode(choices);
-            const card = root.querySelector(".stage-title-card");
-            if (card) card.classList.remove("is-active");
-            const nvl = root.querySelector(".stage-nvl");
-            if (nvl) { nvl.classList.remove("is-active"); clearNode(nvl); }
-            state.nvlLines = [];
-            const box = root.querySelector(".textbox");
-            if (box) {
-                box.classList.remove("textbox--image");
-                box.style.backgroundImage = "";
-                box.style.visibility = "";
-                const nEl = box.querySelector(".textbox__name");
-                const tEl = box.querySelector(".textbox__text");
-                if (nEl) { nEl.style.display = "none"; nEl.textContent = ""; nEl.style.color = ""; }
-                if (tEl) tEl.textContent = "";
-            }
-        }
+        // 清舞台：复位成「还没开始这一局」的样子（见 resetStage）
+        resetStage();
         state.script = null;
         state.snaps = [];
     }
@@ -1408,6 +1590,7 @@
         start, next, rollback, exit, setAuto, setSkip, renderHistory,
         saveAuto, saveQuick, saveManual, loadAuto, loadQuick,
         load, getSave, autoSaveEnabled, quickSaveEnabled,
+        resetStage,          // 舞台复位（离开/进入播放共用；测试与自定义 UI 也可直接调用）
         state,
         isPlaying: () => state.playing,
         history: () => state.history

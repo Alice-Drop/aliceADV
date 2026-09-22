@@ -1,5 +1,5 @@
 {
-    "_comment": "aliceADV 剧本文件（第一章）。每章一个 JSON 文件，位于 story/ 下。指令(cmd)列表：bg(换背景) music(音乐) show(立绘出现) hide(立绘消失) sprite(切换立绘/表情) say(角色说话) narrate(旁白) rename(角色改名) decide(判定/选项) goto(跳转段) wait(等待) title(章节标题卡) end(章节结束)。剧情按『段(segments)』组织，分支判定点用 decide。背景位于 images/bg/，音乐位于 audio/，与 renpy 目录约定兼容。",
+    "_comment": "aliceADV 剧本文件（第一章）。每章一个 JSON 文件，位于 story/ 下。指令(cmd)列表：bg(换背景) music(音乐) show(立绘出现) hide(立绘消失) sprite(切换立绘/表情) say(角色说话) narrate(旁白) rename(角色改名) decide(判定/选项) goto(跳转段) pause(停顿/等点击) wait(等待) title(章节标题卡) end(章节结束)。剧情按『段(segments)』组织，分支判定点用 decide。背景位于 images/bg/，音乐位于 audio/，与 renpy 目录约定兼容。",
 
     "id": "ch1",
     "title": "序章 · 天台的风",

@@ -654,7 +654,19 @@
         // 背景层（剧本未运行时的兜底背景）
         const bg = el("div", { class: "stage-bg" });
         if (cfg.background) bg.style.backgroundImage = `url("${resolveAsset(cfg.background)}")`;
+        // 记下「开场兜底背景」：舞台复位（script.js 的 resetStage）把它还原回来，
+        // 这样重新开始时的画面与刚打开页面时完全一致，而不是空成 CSS 的渐变天空。
+        bg.dataset.fallbackBg = cfg.background ? `url("${resolveAsset(cfg.background)}")` : "";
         root.appendChild(bg);
+
+        // 转场幕布：bg{transition:"fade"} 的「落下→换图→升起」由它实现（script.js 控制 is-on）。
+        // 必须紧跟背景层：与之同为 z-index 0，靠 DOM 顺序压在背景之上、立绘层(z-index 1)之下。
+        // 时长/颜色的默认值写在 stage.css，这里只在 theme.json 显式给出时覆盖。
+        if (cfg.fadeColor) root.style.setProperty("--stage-fade-color", cfg.fadeColor);
+        if (cfg.fadeMs != null) {
+            root.style.setProperty("--stage-fade-ms", typeof cfg.fadeMs === "number" ? cfg.fadeMs + "ms" : cfg.fadeMs);
+        }
+        root.appendChild(el("div", { class: "stage-fade" }));
 
         // 立绘层（剧本 show/sprite/hide 指令操作这里）
         root.appendChild(el("div", { class: "stage-chars" }));
