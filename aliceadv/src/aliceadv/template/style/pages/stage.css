@@ -246,7 +246,7 @@
 .choice.is-visited { color: var(--color-accent); opacity: 0.6; }
 
 /* 底部工具栏（快速菜单）——参考 Ren'Py quick_menu：
- * 底部暗渐变 + 白色文字，按钮无分隔符，均匀排列。
+ * 无背景底（保持画面纯净），白色文字 + 阴影，按钮无分隔符，均匀排列。
  */
 .toolbar {
     position: absolute;
@@ -257,7 +257,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--toolbar-gap, 2em);
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.38) 100%);
+    background: transparent;
     color: rgba(255, 255, 255, 0.92);
     font-family: var(--font-interface);
     font-size: calc(var(--design-w) * 20 / 1920);

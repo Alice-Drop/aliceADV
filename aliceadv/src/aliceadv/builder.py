@@ -272,6 +272,101 @@ def collect_scripts(project_dir):
     return out
 
 
+"""构建资源清单（window.__ASSETS__）时判定类型用的扩展名，与 preload.js 的 AUDIO_EXT 一致。"""
+AUDIO_EXT_RE = re.compile(r"\.(mp3|wav|ogg|m4a|aac|flac|opus)$", re.I)
+
+
+def _story_asset_refs(scripts):
+    """内联剧本里被引用的资源路径（与 preload.js 的 collectStory 同口径）。
+
+    这是**全量并集**：不按段裁剪，也不区分「这一段新增了什么」。原因见
+    docs/预加载.md §8——资源被多个段复用，而玩家可以从任意一段开始
+    （读档的 seg/idx 可以是章内任意一句），因此清单必须覆盖所有被引用的资源，
+    否则从章中进入时体积未知，只能退化成缺省值。"""
+    refs = set()
+    chars = (scripts or {}).get("story/characters.json") or {}
+    for cid, profile in (chars or {}).items():
+        # 角色档案里可能有 "_comment" 这类说明项（模板就有，值是字符串）。
+        # 这类条目不是角色，跳过；同时容错非对象值，构建不该因档案形状异常而中断。
+        if not isinstance(profile, dict) or str(cid).startswith("_"):
+            continue
+        for _sp, path in (profile.get("sprites") or {}).items():
+            if isinstance(path, str) and path:
+                refs.add(path)
+        if isinstance(profile.get("textbox"), str) and profile["textbox"]:
+            refs.add(profile["textbox"])
+    for key, script in (scripts or {}).items():
+        if key in ("story/characters.json", "story/chapters.json") or not isinstance(script, dict):
+            continue
+        segs = dict(script.get("segments") or {})
+        for _chname, ch in (script.get("chapters") or {}).items():
+            for sn, lst in ((ch or {}).get("segments") or {}).items():
+                segs.setdefault(sn, lst)
+        for _sn, lst in segs.items():
+            if not isinstance(lst, list):
+                continue
+            for c in lst:
+                if not isinstance(c, dict):
+                    continue
+                cmd = c.get("cmd")
+                src = c.get("src")
+                if src and cmd in ("bg", "scene", "show", "music", "sound", "voice"):
+                    refs.add(src)
+                if cmd == "say" and c.get("voice"):
+                    refs.add(c["voice"])
+    return refs
+
+
+def _theme_asset_refs(theme):
+    """theme.json 里声明的界面图片：外壳图（文本框/边框/按钮/选项/占位图）与各页背景。
+
+    字段清单与 preload.js 的 collectChrome / collectSystem 一致。"""
+    refs = set()
+
+    def add(v):
+        if isinstance(v, str) and v:
+            refs.add(v)
+
+    for name in ("dialog", "frame"):
+        add((theme.get(name) or {}).get("background"))
+    for name in ("button", "choice"):
+        blk = theme.get(name) or {}
+        add(blk.get("idle"))
+        add(blk.get("hover"))
+    add((theme.get("thumb") or {}).get("placeholder"))
+    for _pname, page in (theme.get("pages") or {}).items():
+        if not isinstance(page, dict):
+            continue
+        add(page.get("background"))
+        for b in (page.get("customButtons") or []):
+            if isinstance(b, dict):
+                add(b.get("image"))
+                add(b.get("hover"))
+    return refs
+
+
+def collect_asset_sizes(web_dir, scripts, theme):
+    """资源清单：工程根相对路径 → {"size": 字节数, "type": "image"|"audio"}。
+
+    体积取自**已复制完成的产物目录**（dist/web），因此与玩家实际下载的文件完全一致。
+    运行时用这份体积计算「预计下载耗时 → slack」，以及按字节加权的进度百分比；
+    清单缺失时 preload.js 按扩展名取缺省体积。"""
+    refs = _story_asset_refs(scripts) | _theme_asset_refs(theme)
+    out = {}
+    for rel in sorted(refs):
+        if rel.startswith(("http://", "https://", "data:", "//", "/")):
+            continue
+        path = os.path.join(web_dir, rel.replace("/", os.sep))
+        if not os.path.isfile(path):
+            print("  ! 资源清单: 找不到被引用的资源 " + rel)
+            continue
+        out[rel] = {
+            "size": os.path.getsize(path),
+            "type": "audio" if AUDIO_EXT_RE.search(rel) else "image",
+        }
+    return out
+
+
 def _deep_merge(default, user):
     """deep merge：默认配置模板(default) + 用户配置(user) → 生效配置。
 
@@ -397,6 +492,12 @@ def build_project(project_dir):
         with open(os.path.join(web, _name), "w", encoding="utf-8") as _f:
             json.dump(_data, _f, ensure_ascii=False, indent=2)
 
+    # 5b-3. 资源清单：被引用资源的体积与类型。运行时据此计算「预计下载耗时 → slack」
+    #       与按字节加权的进度；取自产物目录，因此与实际发行的文件一致。
+    #       步骤 7c 内联为 window.__ASSETS__（与 __SCRIPTS__ 同理，file:// 下也能读）。
+    assets = collect_asset_sizes(web, scripts, theme)
+    assets_bytes = sum(v["size"] for v in assets.values())
+
     # 5b. 字体 @font-face（字体加载机制）：把 theme.json 中声明了 src 的字体
     #     生成为 style/fonts.built.css；随后紧跟的「CSS 资源路径重写」会把它
     #     内部的 url(fonts/...) 按文件深度统一重写为 ../fonts/...，与模板约定一致。
@@ -444,6 +545,9 @@ def build_project(project_dir):
     # 7b. 把主题与剧本内联（在 theme.js 之前），使 file:// 直接可用
     theme_inline = json.dumps(theme, ensure_ascii=False)
     scripts_inline = json.dumps(scripts, ensure_ascii=False)
+    # 7c. 资源清单一并内联：运行时预加载调度需要知道每个资源的体积。
+    #     路径用紧凑分隔符输出，几百项也只是一个几 KB 的脚本。
+    assets_inline = json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
     # 打包引擎版本：来自 aliceadv 包（ENGINE_NAME/ENGINE_VERSION），
     # 而非工程 info.json，使构建产物在关于页/标题页展示「引擎版本」。
     engine_inline = json.dumps(
@@ -453,6 +557,7 @@ def build_project(project_dir):
         f'<script>window.__ENGINE__ = {engine_inline};</script>\n'
         f'    <script>window.__THEME__ = {theme_inline};</script>\n'
         f'    <script>window.__SCRIPTS__ = {scripts_inline};</script>\n'
+        f'    <script>window.__ASSETS__ = {assets_inline};</script>\n'
         '    <script src="style/theme.js"></script>',
         1
     )
@@ -462,13 +567,13 @@ def build_project(project_dir):
 
     end_time = time.time()
 
-    print("✓ aliceADV build 完成")
-    print(f"用时{end_time-start_time}秒")
+    print("✓ aliceADV build 完成   用时{end_time-start_time}秒")
     print(f"  工程: {project_dir}")
     print(f"  主题: {theme.get('info', {}).get('name', '(未命名)')} "
           f"v{theme.get('info', {}).get('version', '?')}")
     print(f"  引擎: {ENGINE_NAME} {ENGINE_VERSION}")
     print(f"  剧本: {len(scripts)} 个文件已内联 ({', '.join(scripts.keys()) if scripts else '无'})")
+    print(f"  资源清单: {len(assets)} 项 / {assets_bytes / 1048576:.1f} MB 被引用")
     print(f"  产物: {os.path.relpath(html_path, project_dir)}")
     print("  预览: 直接打开该 index.html，或在工程目录运行 python3 -m http.server 后访问 dist/web/")
     return True

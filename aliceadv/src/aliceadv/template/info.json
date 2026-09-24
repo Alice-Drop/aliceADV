@@ -6,6 +6,35 @@
   "preload": {
     "boot": "title",
     "runtime": ["page", "predict"],
-    "predictLookahead": 20
+    "timeout": 12000,
+    "onTimeout": "hint",
+    "slowSpeedKBps": 250,
+    "lookahead": {
+      "windowSeconds": 30,
+      "horizonSeconds": 180,
+      "maxInstructions": 600,
+      "defaultLineSeconds": 3,
+      "autoLineSeconds": 2.6,
+      "skipLineSeconds": 0.18
+    },
+    "chapter": {
+      "scope": "current",
+      "preload": "adaptive"
+    },
+    "stage": {
+      "preludeSeconds": 60,
+      "preludeImagesOnly": true,
+      "preludeBudgetSeconds": 8
+    },
+    "fastForward": {
+      "skipVoice": true
+    },
+    "fallback": {
+      "default": "degrade",
+      "image": "block",
+      "audio": "degrade",
+      "allowSkipWait": true,
+      "maskDelayMs": 150
+    }
   }
 }

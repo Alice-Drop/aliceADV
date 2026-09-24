@@ -39,16 +39,101 @@
     to { transform: rotate(360deg); }
 }
 
-/* 进度提示文字（可选，由 JS 注入） */
+/* 进度提示文字：默认透明（不占视线），JS 在超时后填入文字并加 .is-shown 淡入。
+ * 文案与触发条件见 preload.js 的 HINT_* / waitForPaint。 */
 .boot-hint {
     position: absolute;
     bottom: 18%;
     left: 0;
     right: 0;
+    margin: 0;
     text-align: center;
     color: rgba(255, 255, 255, 0.55);
     font-size: 14px;
     font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
     letter-spacing: 0.04em;
     user-select: none;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.boot-hint.is-shown {
+    opacity: 1;
+}
+
+/* =========================================================
+ * 剧情中途的资源等待遮罩 (wait mask)
+ *
+ * 与 #boot-mask 分开的两层，语义不同：
+ *   #boot-mask  遮住的是一张还没画好的界面 —— 纯黑全屏，盖住尚未构造的页面（z-index 9999）
+ *   #wait-mask  遮住的是一个已经画好、只差一张图的界面 —— 半透明，舞台仍可见
+ * 只有在 info.json 的 preload.fallback 把某类资源设成 "block"、且该资源确实未就绪时
+ * 才会出现（见 preload.js 的 barrier）。
+ * ========================================================= */
+
+#wait-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 9990;                 /* 低于 #boot-mask：进章的遮罩优先 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 1;
+    pointer-events: all;
+    transition: opacity 0.25s ease;
+}
+
+#wait-mask.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 面板：转圈 + 进度 + 「不等了」。不带底色，避免在浅色主题下压出一块深斑 */
+.wait-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+/* 复用 .boot-spinner 的旋转动画，只调小一档（此刻舞台仍在动，圈不宜抢视线） */
+#wait-mask .boot-spinner {
+    width: 44px;
+    height: 44px;
+    border-width: 5px;
+}
+
+/* 按字节加权的进度（preload.js 的 progressOf）。无进度可报时为空字符串，故留最小高度防跳动 */
+.wait-progress {
+    margin: 0;
+    min-height: 1em;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 14px;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+
+/* 超时提示：与 .boot-hint 同一份文案（preload.js 的 HINT_*），但**不能**复用 .boot-hint 的
+ * position:absolute —— 那个定位是相对 #boot-mask 的视口底部 18%，在这里会飘离面板。
+ * 本元素在 .wait-panel 的纵向流里，紧跟进度百分比。 */
+.wait-hint {
+    margin: 0;
+    max-width: 22em;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 14px;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: 0.04em;
+    user-select: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+.wait-hint.is-shown { opacity: 1; }
+
+/* 「不等了」按钮：显隐由 JS 按 preload.fallback.allowSkipWait 控制（"" / "none"） */
+#wait-mask .wait-skip {
+    font-size: 14px;
 }

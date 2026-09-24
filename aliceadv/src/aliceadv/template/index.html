@@ -71,8 +71,23 @@
         </main>
     </div>
 
-    <!-- 启动加载遮罩：进入网页即显示，预加载就绪后渐隐（详见 preload.js） -->
-    <div id="boot-mask"><div class="boot-spinner"></div></div>
+    <!-- 启动加载遮罩：进入网页 / 进入章时显示，预加载就绪后渐隐（详见 preload.js） -->
+    <!-- .boot-hint 为空行，仅在超时（preload.onTimeout="hint"）时由 JS 填入提示文字 -->
+    <div id="boot-mask"><div class="boot-spinner"></div><p class="boot-hint" id="boot-hint"></p></div>
+
+    <!-- 剧情中途的资源等待遮罩：与 #boot-mask 分开。boot 遮住的是一张还没画好的界面，
+         这一层遮住的是一个已经画好、只差一张图的界面，因此半透明、舞台仍可见。
+         由 preload.js 的 barrier() 按 info.json preload.fallback 策略控制显隐。 -->
+    <div id="wait-mask" class="is-hidden">
+        <div class="wait-panel">
+            <div class="boot-spinner"></div>
+            <p class="wait-progress" id="wait-progress"></p>
+            <!-- .wait-hint 同 #boot-mask 内的 .boot-hint：为空行，仅在等待超过
+                 preload.timeout 时由 preload.js 的 waitForPaint / waitWithBarrier 填入 -->
+            <p class="wait-hint" id="wait-hint"></p>
+            <button type="button" class="paper paper-btn wait-skip">不等了</button>
+        </div>
+    </div>
 
     <script src="style/theme.js"></script>
     <script src="style/preload.js"></script>

@@ -157,7 +157,7 @@ Common instructions:
 | Instruction | Purpose |
 |---|---|
 | `bg` / `scene` | Set the background image. |
-| `show` / `hide` | Add or remove a character sprite or image. |
+| `show` / `hide` | Add or remove a character sprite or image (`hide` with no target clears them all). |
 | `sprite` | Swap the sprite of an already-shown character. |
 | `say` / `narrate` | Display dialogue or narration. |
 | `music` / `sound` / `voice` / `stop` | Control audio. |

@@ -47,7 +47,7 @@
         "seg_ending": [
             { "cmd": "narrate", "text": "夕阳把两个人的影子拉得很长。" },
             { "cmd": "say", "char": "elin", "sprite": "smile", "text": "明天，也会在这里等你哦。" },
-            { "cmd": "hide", "char": "elin", "anim": "fade" },
+            { "cmd": "hide", "char": "elin", "transition": "fade" },
             { "cmd": "music", "stop": true, "fade": 2 },
             { "cmd": "narrate", "text": "——序章 · 完——" },
             { "cmd": "end", "action": "title" }
