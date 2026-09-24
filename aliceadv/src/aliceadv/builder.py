@@ -567,7 +567,7 @@ def build_project(project_dir):
 
     end_time = time.time()
 
-    print("✓ aliceADV build 完成   用时{end_time-start_time}秒")
+    print(f"✓ aliceADV build 完成   用时{end_time-start_time}秒")
     print(f"  工程: {project_dir}")
     print(f"  主题: {theme.get('info', {}).get('name', '(未命名)')} "
           f"v{theme.get('info', {}).get('version', '?')}")
