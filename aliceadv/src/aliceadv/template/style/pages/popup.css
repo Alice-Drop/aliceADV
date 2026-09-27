@@ -30,7 +30,7 @@
 
 .popup__msg {
     font-family: var(--font-interface);
-    color: var(--color-text);
+    color: var(--color-interface);
     font-size: var(--size-label);
     margin: 0 0 calc(var(--design-h) * 22 / 1080) 0;
 }

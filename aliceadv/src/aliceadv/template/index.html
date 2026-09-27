@@ -33,28 +33,28 @@
             <section id="page_title" class="page is-active" data-layout="left"></section>
 
             <!-- 2. 存档页 -->
-            <section id="page_save" class="page"></section>
+            <section id="page_save" class="page page_save"></section>
 
             <!-- 3. 读档页 -->
-            <section id="page_load" class="page"></section>
+            <section id="page_load" class="page page_load"></section>
 
             <!-- 4. 设置页 -->
-            <section id="page_settings" class="page"></section>
+            <section id="page_settings" class="page page_settings"></section>
 
             <!-- 5. 章节页 -->
-            <section id="page_chapters" class="page"></section>
+            <section id="page_chapters" class="page page_chapters"></section>
 
             <!-- 6. 分支页 -->
-            <section id="page_branches" class="page"></section>
+            <section id="page_branches" class="page page_branches"></section>
 
             <!-- 7. 舞台 (核心游戏页) -->
-            <section id="page_stage" class="page"></section>
+            <section id="page_stage" class="page page_stage"></section>
 
             <!-- 8. 画廊页 -->
-            <section id="page_gallery" class="page"></section>
+            <section id="page_gallery" class="page page_gallery"></section>
 
             <!-- 9. 关于页 -->
-            <section id="page_about" class="page"></section>
+            <section id="page_about" class="page page_about"></section>
 
             <!-- 浮层：退出确认 -->
             <div id="popup_quitQuery" class="popup"></div>
@@ -89,6 +89,9 @@
         </div>
     </div>
 
+    <!-- 设置系统：提供 localStorage 持久化与显示模式（窗口 / 浏览器全屏），
+         必须早于 theme.js —— 设置页在 buildAll 时就要读当前值来渲染选中态。 -->
+    <script src="style/settings.js"></script>
     <script src="style/theme.js"></script>
     <script src="style/preload.js"></script>
     <script src="style/script.js"></script>
@@ -107,6 +110,10 @@
             // 剧本目录（章节/分支/画廊）来自 story/chapters.json，与 theme.json 解耦
             const catalog = await AliceADVTheme.loadCatalog();
             AliceADVTheme.buildAll(theme, catalog);
+            // 设置系统在主题就绪后才初始化：localStorage 键要按 theme.info.name 取名，
+            // 主题未就绪时会退化成 "default"，与 buildAll 之后存下的不是同一份。
+            // init() 读到「全屏幕」时挂一次性手势监听：玩家首次点击画面后向浏览器申请全屏。
+            if (window.AliceADVSettings) window.AliceADVSettings.init();
             // 启动加载遮罩：按 info.json preload.boot 策略强制预加载，
             // 就绪（或总超时兜底）后渐隐遮罩，再绑定引擎事件，避免遮罩期间误触。
             if (window.AliceADVPreload) {

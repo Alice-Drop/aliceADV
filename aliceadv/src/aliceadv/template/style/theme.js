@@ -20,7 +20,7 @@
     const I18N = {
         start:    "开始游戏",
         continue: "继续游戏",
-        load:     "读取存档",
+        load:     "读取",
         settings: "设置",
         chapters: "章节选择",
         gallery:  "画廊",
@@ -66,9 +66,14 @@
         save:     "保存",
         qsave:    "Q.保存",
         qload:    "Q.读取",
-        load:     "读档",
+        load:     "读取",
         menu:     "菜单"
     };
+
+    /* 关于页两层衬底的颜色**不在这里给默认值**：默认值唯一来源是模板 theme.json 的
+     * pages.about.backgroundColor / panelColor（构建时 _deep_merge(模板, 工程) 合并进 window.__THEME__，
+     * 工程没写就用模板的值）。这里只负责「配置里有就写进内联样式」，写死常量会造成第二处真值源，
+     * 还会让工程里显式写 null（＝不要衬底）被兜回来。 */
 
     /* 剧本目录（章节/分支/画廊）。原属于 theme.json 的『目录』信息已移交给 story/chapters.json，
      * 引擎从此处读取，theme.json 只负责样式与界面文本。 */
@@ -149,9 +154,18 @@
         return Math.round(v * f) / f;
     }
     function rel(v, fallback) {
-        if (v == null) return fallback;
+        if (v == null) return fallback;   // 不传 fallback 时返回 undefined，setVar 会跳过（＝不写这个变量）
         if (typeof v === "number") return roundSig(v * 100, 4) + "%";
         return v;
+    }
+
+    /* 字段名 → CSS 变量名：统一 kebab-case。
+     * CSS 侧的既有约定就是 kebab（--color-accent-deep / --size-page-heading），
+     * 若按 camelCase 拼名字（--color-accentDeep），就会出现「JS 写一个名、CSS 读另一个名」的错位：
+     * theme.json 里那些驼峰键（accentDeep / idleSmall / pageHeading / sectionHeading）
+     * 会静默失效，页面上吃到的是 base.css 的兜底字面值。 */
+    function cssName(s) {
+        return String(s).replace(/_/g, "-").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
     }
 
     /* ---------- 1. 主题：写入 CSS 变量 ---------- */
@@ -162,11 +176,15 @@
         // 字号：基于设计宽度 1920 的比例（输出为 px，由 #stage transform 整体缩放）
         const sizes = theme.sizes || {};
         for (const k in sizes) {
-            setVar(`--size-${k}`, `calc(var(--design-w) * ${sizes[k]} / 1920)`);
+            if (k.startsWith("_")) continue;
+            setVar(`--size-${cssName(k)}`, `calc(var(--design-w) * ${sizes[k]} / 1920)`);
         }
         // 颜色
         const colors = theme.colors || {};
-        for (const k in colors) setVar(`--color-${camel(k)}`, colors[k]);
+        for (const k in colors) {
+            if (k.startsWith("_")) continue;   // _comment 之类的说明键不是颜色
+            setVar(`--color-${cssName(k)}`, colors[k]);
+        }
         // 字体（支持字符串栈 / 对象形态 {family, src, fallbacks}）
         const fonts = theme.fonts || {};
         for (const k in fonts) {
@@ -182,55 +200,71 @@
         }
         // 屏幕
         const screen = theme.screen || {};
+        // 宽高比：不参与布局计算（#stage 的尺寸由 --design-w/--design-h 决定，
+        // 两者的比值本身就是宽高比），仅作为可供自行引用的信息变量写出。
         if (screen.aspect) setVar("--aspect", screen.aspect.replace(":", " / "));
-        if (screen.designWidth) {
-            setVar("--design-w", screen.designWidth + "px");
-            setVar("--design-w-px", screen.designWidth + "px");
-        }
-        if (screen.designHeight) {
-            setVar("--design-h", screen.designHeight + "px");
-            setVar("--design-h-px", screen.designHeight + "px");
-        }
+        // 设计分辨率：engine.js 的 fitStage() 直接量 #stage 的布局尺寸，读的就是这两个值。
+        if (screen.designWidth)  setVar("--design-w", screen.designWidth + "px");
+        if (screen.designHeight) setVar("--design-h", screen.designHeight + "px");
         if (screen.overflowColor) {
             document.body.style.background = screen.overflowColor;
             setVar("--overflow-color", screen.overflowColor);
         }
         // 存档槽
         if (theme.slot) {
-            setVar("--slot-cols", theme.slot.cols || 3);
-            setVar("--slot-aspect", `${theme.slot.width || 414} / ${theme.slot.height || 309}`);
+            setVar("--slot-cols", theme.slot.cols);
+            if (theme.slot.width != null && theme.slot.height != null) {
+                setVar("--slot-aspect", `${theme.slot.width} / ${theme.slot.height}`);
+            }
         }
         // notify/skip 位置
         if (theme.notifyYpos != null) setVar("--notify-ypos", theme.notifyYpos);
         if (theme.skipYpos != null)   setVar("--skip-ypos",   theme.skipYpos);
 
-        // 布局自由度（相对值 → 百分比 / em，构建时同规则翻译）
+        /* 布局自由度（相对值 → 百分比 / em）。
+         * 这里**只写 theme.json 里配了的值**，不再各带一份字面兜底默认值：
+         *   默认值的唯一来源是模板 theme.json（构建时 _deep_merge(模板, 工程) 已合并进来），
+         *   最后一道兜底写在 CSS 的 var(--x, 默认) 里（见 pages/stage.css）。
+         * 在渲染流程里再写一份 "5%" / "3.4em" 这类字面量＝同一份默认值有第三处副本，
+         * 改了模板却漏改这里就会出现「模板改了、页面没变」的假象。 */
         const L = theme.layout || {};
         const d = L.dialogue || {};
-        setVar("--dialogue-left",   rel(d.left,   "5%"));
-        setVar("--dialogue-bottom", rel(d.bottom, "5%"));
-        setVar("--dialogue-width",  rel(d.width,  "90%"));
-        setVar("--dialogue-height", rel(d.height, "28%"));
-        const padX = d.padX != null ? d.padX : "3.4em";
+        setVar("--dialogue-left",   rel(d.left));
+        setVar("--dialogue-bottom", rel(d.bottom));
+        setVar("--dialogue-width",  rel(d.width));
+        setVar("--dialogue-height", rel(d.height));
+        // padX / padY 是「派生基准」（左右取 padX、上下取 padY），属于配置内部的继承关系，不是默认值
+        const padX = d.padX;
         setVar("--dialogue-pad-x",      padX);
         setVar("--dialogue-pad-left",   d.padLeft  != null ? d.padLeft  : padX);
         setVar("--dialogue-pad-right",  d.padRight != null ? d.padRight : padX);
-        setVar("--dialogue-pad-top",    d.padTop != null ? d.padTop : (d.padY != null ? d.padY : "2.4em"));
-        setVar("--dialogue-pad-bottom", d.padBottom != null ? d.padBottom : (d.padY != null ? d.padY : "2.4em"));
-        setVar("--dialogue-justify",    d.justify != null ? d.justify : "center");
-        setVar("--dialogue-text-align", d.textAlign != null ? d.textAlign : "left");
+        setVar("--dialogue-pad-top",    d.padTop    != null ? d.padTop    : d.padY);
+        setVar("--dialogue-pad-bottom", d.padBottom != null ? d.padBottom : d.padY);
+        setVar("--dialogue-justify",    d.justify);
+        setVar("--dialogue-text-align", d.textAlign);
         const n = L.name || {};
-        setVar("--name-left", rel(n.left, "3%"));
-        setVar("--name-top",  rel(n.top,  "-7%"));
+        setVar("--name-left", rel(n.left));
+        setVar("--name-top",  rel(n.top));
+        // 立绘与 NVL：与 builder.build_css_vars 保持同名同源（此前只有 builder 写，
+        // 模板模式（运行时 fetch theme.json）下 layout.sprite / layout.nvl 会被完全忽略）
+        const sp = L.sprite || {};
+        setVar("--sprite-bottom", rel(sp.bottom));
+        setVar("--sprite-height", rel(sp.height));
+        const nv = L.nvl || {};
+        setVar("--nvl-left",       rel(nv.left));
+        setVar("--nvl-width",      rel(nv.width));
+        setVar("--nvl-line-gap",   nv.lineGap);
+        setVar("--nvl-justify",    nv.justify);
+        setVar("--nvl-text-align", nv.textAlign);
         const c = L.choice || {};
-        setVar("--choice-left",   rel(c.left,   "10%"));
-        setVar("--choice-top",    rel(c.top,    "26%"));
-        setVar("--choice-width",  rel(c.width,  "80%"));
-        setVar("--choice-gap",    c.gap     != null ? c.gap     : "1.2em");
-        setVar("--choice-max-width", c.maxWidth != null ? c.maxWidth : "60%");
+        setVar("--choice-left",   rel(c.left));
+        setVar("--choice-top",    rel(c.top));
+        setVar("--choice-width",  rel(c.width));
+        setVar("--choice-gap",    c.gap);
+        setVar("--choice-max-width", c.maxWidth);
         const t = L.toolbar || {};
-        setVar("--toolbar-height", t.height != null ? t.height : "6.5em");
-        setVar("--toolbar-gap",    t.gap    != null ? t.gap    : "2em");
+        setVar("--toolbar-height", t.height);
+        setVar("--toolbar-gap",    t.gap);
 
         // UI 图片（数据驱动）：对话框 / 面板边框 / 按钮背景 / 画廊占位图统一由 theme.json 决定，
         // 不再硬编码在 CSS 的 url(...) 里。CSS 侧用 var(--gui-*) 引用，此处写入实际路径；
@@ -246,11 +280,9 @@
         const ch = theme.choice || {};
         setVar("--gui-choice-idle",  imgVar(ch.idle));
         setVar("--gui-choice-hover", imgVar(ch.hover));
-        const th = theme.thumb || {};
-        setVar("--gui-thumb", imgVar(th.placeholder));
+        // thumb.placeholder 不写 CSS 变量：它是「每个槽位各自的图」，由本文件与 preload.js
+        // 直接读 theme.thumb.placeholder 内联到对应元素上，CSS 侧没有任何 var(--gui-thumb) 消费者。
     }
-    function camel(s) { return s.replace(/[-_](.)/g, (_, c) => c.toUpperCase()); }
-
     /* 继续按钮是否可用：自动存档开启 且 存在自动存档。
      * 任一不满足时，首页「继续」按钮置灰失效（但按用户约定，按钮的「显示/隐藏」由 theme.json 控制，引擎只负责有效性）。 */
     function continueUsable() {
@@ -270,17 +302,17 @@
         const cfg = (theme.pages && theme.pages.title) || {};
         root.setAttribute("data-layout", cfg.layout || "left");
 
-        // 背景图层
+        // 背景图层。未配置 background 时代码不写任何内联背景——
+        // 兜底底纹由 CSS（#page_title .title-bg）用主题色给，见 pages/title.css。
         const bg = el("div", { class: "title-bg" });
         if (cfg.background) {
             bg.style.backgroundImage = `url("${resolveAsset(cfg.background)}")`;
-        } else {
-            bg.style.background = "linear-gradient(135deg, #cfe2ff 0%, #a6c8ff 50%, #6e9be5 100%)";
         }
         // 背景铺满方式：自定义热区模式默认 100% 100%（图片 0~1 坐标与热区 0~1 坐标严格对齐）；
         // 普通布局默认 cover（保持比例、可能裁切，适合纯装饰背景）。可用 backgroundSize 覆盖。
+        // 这两个值描述的是「铺满策略」而非主题配色，且 CSS 侧 .page__bg 已写 cover，故保留在此。
         bg.style.backgroundSize = cfg.backgroundSize
-            || (cfg.customButtons && cfg.customButtons.length ? "100% 100%" : "cover");
+            || (cfg.customButtons && cfg.customButtons.length ? "100% 100%" : "");
         root.appendChild(bg);
 
         if (cfg.overlay) root.appendChild(el("div", { class: "page__overlay" }));
@@ -386,7 +418,16 @@
         if (!root) return;
         clearChildren(root);
 
-        const cfg = (theme.pages && theme.pages[pageId.replace("page_", "")]) || {};
+        const pageKey = pageId.replace("page_", "");
+        const cfg = (theme.pages && theme.pages[pageKey]) || {};
+        // 菜单页共享外观：整页衬底 + 主内容底板。默认值唯一来源 = 模板 theme.json 的 gameMenu
+        // （构建时 _deep_merge(模板, 工程) 合并，工程没写就用模板的）；单页可用
+        // pages.<页>.backgroundColor / panelColor 覆盖，显式 null 表示不要该层。
+        const shared = theme.gameMenu || {};
+        const pickCfg = k => (cfg[k] !== undefined ? cfg[k] : shared[k]);
+        const tintColor  = pickCfg("backgroundColor");
+        const panelColor = pickCfg("panelColor");
+
         if (cfg.background) {
             root.appendChild(el("div", {
                 class: "page__bg",
@@ -395,6 +436,17 @@
         } else {
             root.appendChild(el("div", { class: "page__bg page__bg--solid" }));
         }
+
+        // ① 整页衬底：压在背景图之上、内容之下的一层（半透明）纯色，用于「背景图太花，正文直接贴上去不好读」。
+        //    颜色来自 gameMenu.backgroundColor（或单页覆盖），支持 rgba()；为 null 就不铺这一层。
+        if (tintColor) {
+            root.appendChild(el("div", {
+                class: "page__tint",
+                style: `background:${tintColor};`
+            }));
+        }
+        // ② 主内容底板：写成 CSS 变量，由 game-menu.css 用到 .game-menu__main 上（不透明白衬底）。
+        root.style.setProperty("--game-menu-panel", panelColor || "transparent");
 
         const menu = el("div", { class: "game-menu" });
 
@@ -407,7 +459,7 @@
         const sidebar = el("div", { class: "game-menu__sidebar" });
         const sideOrder = resolveMenuList(
             (theme.sidebar && theme.sidebar.length) ? theme.sidebar
-                : ["history", "save", "load", "settings", "chapters", "gallery", "branches", "about", "back"],
+                : ["save", "load", "settings", "chapters", "gallery", "branches", "about", "back"],
             theme
         );
         sideOrder.forEach(key => {
@@ -469,18 +521,25 @@
             if (filled && data.display && data.display.thumb) {
                 thumb.style.backgroundImage = `url("${resolveAsset(data.display.thumb)}")`;
             } else {
+                // 空槽只在缩略图区放一个居中标签；底部 meta 区不再重复写同一份文字
+                //（此前「快速存档」上下出现两次、且绝对定位的 meta 会被底边裁切）。
                 thumb.textContent = d.system ? d.label : "Empty slot";
             }
             slot.appendChild(thumb);
-            const meta = el("div", { class: "slot__meta" });
             if (filled && data.display) {
+                const meta = el("div", { class: "slot__meta" });
                 meta.appendChild(el("div", { class: "slot__name", text: data.display.label || "" }));
                 meta.appendChild(el("div", { class: "slot__text", text: data.display.text || "" }));
                 meta.appendChild(el("div", { class: "slot__time", text: data.timeStr || "" }));
-            } else {
-                meta.appendChild(el("div", { class: "slot__name", text: d.label }));
+                slot.appendChild(meta);
             }
-            slot.appendChild(meta);
+            // 悬停操作提示：保存页是「写入」（空槽=保存到这里，已占用=覆盖保存），
+            // 读档页只有已占用的槽能读。由 CSS 控制 hover 时浮现。
+            if (isSave) {
+                slot.appendChild(el("div", { class: "slot__hint", text: filled ? "覆盖保存" : "保存到这里" }));
+            } else if (filled) {
+                slot.appendChild(el("div", { class: "slot__hint", text: "读取此档" }));
+            }
             grid.appendChild(slot);
         });
         body.appendChild(grid);
@@ -503,60 +562,177 @@
         body.appendChild(jumper);
     }
 
-    /* ---------- 3.2 设置 ---------- */
+    /* ---------- 3.2 设置 ----------
+     * 选项不是静态装饰：每一项都从 AliceADVSettings（localStorage 持久化）读当前值渲染选中态，
+     * 点击写回 set()，并订阅变更保持界面同步。设置模块缺失时退化为「按默认值渲染、不可交互」。
+     *
+     * 三种控件形态：
+     *   分段按钮 seg    —— 单选（显示模式 / Rollback Side）
+     *   开关按钮 chip   —— 布尔项（快进模式各开关 / 全部静音）
+     *   滑块 settingSlider —— 数值项（速度 / 音量），可拖拽，右侧读百分比
+     */
     function fillSettingsGrid(body) {
-        const row1 = el("div", { class: "settings-row" });
+        const S = global.AliceADVSettings;
+        const wrap = el("div", { class: "settings" });
 
-        const g1 = el("div", { class: "settings-group" }, [
-            el("div", { class: "settings-label", text: "显示模式" }),
-            el("div", { class: "settings-buttons" }, [
-                el("button", { class: "paper paper-btn is-current", text: "窗口" }),
-                el("button", { class: "paper paper-btn", text: "全屏幕" })
-            ])
-        ]);
-        const g2 = el("div", { class: "settings-group" }, [
-            el("div", { class: "settings-label", text: "Rollback Side" }),
-            el("div", { class: "settings-buttons" }, [
-                el("button", { class: "paper paper-btn", text: "Disable" }),
-                el("button", { class: "paper paper-btn is-current", text: "Left" }),
-                el("button", { class: "paper paper-btn", text: "Right" })
-            ])
-        ]);
-        const g3 = el("div", { class: "settings-group" }, [
-            el("div", { class: "settings-label", text: "快进模式" }),
-            el("div", { class: "settings-buttons" }, [
-                el("label", { class: "checkbox" }, [ el("span", { class: "checkbox__box" }), "Unseen Text" ]),
-                el("label", { class: "checkbox is-checked" }, [ el("span", { class: "checkbox__box" }), "选项后" ]),
-                el("label", { class: "checkbox" }, [ el("span", { class: "checkbox__box" }), "转场特效" ])
-            ])
-        ]);
-        row1.appendChild(g1); row1.appendChild(g2); row1.appendChild(g3);
-        body.appendChild(row1);
+        /* --- 显示 --- */
+        const fsOK = !S || S.isFullscreenSupported();
+        wrap.appendChild(settingsSection("显示", [
+            settingsField("显示模式", segmented("displayMode", [
+                { value: "window", label: "窗口" },
+                { value: "fullscreen", label: "全屏幕", disabled: !fsOK }
+            ]),
+                fsOK ? "全屏幕会在下次启动游戏、你第一次点击画面时自动申请进入；"
+                       + "按 ESC 退出全屏会自动切回窗口模式。"
+                     : "当前环境不允许进入全屏（可能被嵌入窗口限制），已锁定为窗口模式。",
+                true)
+        ]));
 
-        const row2 = el("div", { class: "settings-row mt-16" });
-        const s1 = el("div", { class: "settings-group" }, [ el("div", { class: "settings-label", text: "文字显示速度" }), slider(0.55) ]);
-        const s2 = el("div", { class: "settings-group" }, [ el("div", { class: "settings-label", text: "自动模式等待时间" }), slider(0.3) ]);
-        const s3 = el("div", { class: "settings-group" }, [ el("div", { class: "settings-label", text: "音乐音量" }), slider(0.6) ]);
-        const s4 = el("div", { class: "settings-group" }, [ el("div", { class: "settings-label", text: "音效音量" }), slider(0.7) ]);
-        const s5 = el("div", { class: "settings-group" }, [ el("div", { class: "settings-label", text: "语音音量" }), slider(0.8) ]);
-        const s6 = el("div", { class: "settings-group" }, [
-            el("div", { class: "settings-label", text: " " }),
-            el("div", { class: "settings-buttons" }, [
-                el("label", { class: "checkbox" }, [ el("span", { class: "checkbox__box" }), "Mute All" ])
-            ])
+        /* --- 文本与播放 --- */
+        wrap.appendChild(settingsSection("文本与播放", [
+            settingsField("文字显示速度", settingSlider("textSpeed")),
+            settingsField("自动模式等待时间", settingSlider("autoWait")),
+            settingsField("Rollback Side", segmented("rollbackSide", [
+                { value: "disable", label: "Disable" },
+                { value: "left",    label: "Left" },
+                { value: "right",   label: "Right" }
+            ]), null, true),
+            settingsField("快进模式", chipRow([
+                chip("skipUnseen", "Unseen Text"),
+                chip("skipAfterChoice", "选项后"),
+                chip("skipTransitions", "转场特效")
+            ]), null, true)
+        ]));
+
+        /* --- 音量 --- */
+        const volSection = settingsSection("音量", [
+            settingsField("音乐音量", settingSlider("musicVolume")),
+            settingsField("音效音量", settingSlider("soundVolume")),
+            settingsField("语音音量", settingSlider("voiceVolume")),
+            settingsField("全部静音", chipRow([chip("muteAll", "Mute All")]),
+                "开启后音量条锁定当前值。")
         ]);
-        [s1, s2, s3, s4, s5, s6].forEach(s => row2.appendChild(s));
-        body.appendChild(row2);
+        wrap.appendChild(volSection);
+
+        // 静音时把音量区整体压暗：值仍然保留，只是不再可改。
+        const syncMute = function () {
+            if (!S) return;
+            volSection.classList.toggle("is-muted", !!S.get("muteAll"));
+        };
+        syncMute();
+        if (S) S.onChange(function (k) { if (k === "muteAll") syncMute(); });
+
+        body.appendChild(wrap);
     }
 
-    function slider(value) {
-        const root = el("div", { class: "slider" });
+    /* 分区容器：标题 + 两列字段网格 */
+    function settingsSection(title, fields) {
+        const sec = el("section", { class: "settings-section" });
+        sec.appendChild(el("h3", { class: "settings-section__title", text: title }));
+        const grid = el("div", { class: "settings-grid" });
+        (fields || []).forEach(f => { if (f) grid.appendChild(f); });
+        sec.appendChild(grid);
+        return sec;
+    }
+
+    /* 单个字段：标签 + 控件 + 可选说明。full = 独占整行 */
+    function settingsField(labelText, control, hint, full) {
+        const f = el("div", { class: "settings-field" + (full ? " settings-field--full" : "") });
+        f.appendChild(el("div", { class: "settings-label", text: labelText }));
+        if (control) f.appendChild(control);
+        if (hint) f.appendChild(el("div", { class: "settings-hint", text: hint }));
+        return f;
+    }
+
+    /* 分段按钮：一组互斥选项，选中项高亮 */
+    function segmented(key, options) {
+        const S = global.AliceADVSettings;
+        const group = el("div", { class: "seg", role: "group" });
+        const items = [];
+        options.forEach(opt => {
+            const b = el("button", {
+                type: "button", class: "seg__btn", text: opt.label,
+                "data-setting": key, "data-value": opt.value
+            });
+            if (opt.disabled) { b.disabled = true; b.classList.add("is-disabled"); }
+            b.addEventListener("click", function () {
+                if (S) S.set(key, opt.value);
+            });
+            items.push({ node: b, value: opt.value });
+            group.appendChild(b);
+        });
+        const sync = function () {
+            const cur = S ? S.get(key) : options[0].value;
+            items.forEach(it => it.node.classList.toggle("is-on", it.value === cur));
+        };
+        sync();
+        if (S) S.onChange(function (k) { if (k === key) sync(); });
+        return group;
+    }
+
+    /* 开关按钮：布尔项，带勾选标记 */
+    function chip(key, label) {
+        const S = global.AliceADVSettings;
+        const b = el("button", { type: "button", class: "chip", "data-setting": key });
+        b.appendChild(el("span", { class: "chip__mark" }));
+        b.appendChild(el("span", { class: "chip__text", text: label }));
+        const sync = function () { b.classList.toggle("is-on", !!(S ? S.get(key) : false)); };
+        b.addEventListener("click", function () {
+            if (S) S.set(key, !S.get(key));
+        });
+        sync();
+        if (S) S.onChange(function (k) { if (k === key) sync(); });
+        return b;
+    }
+    function chipRow(chips) {
+        return el("div", { class: "chip-row" }, chips);
+    }
+
+    /* 数值滑块：可拖拽，右侧显示百分比 */
+    function settingSlider(key) {
+        const S = global.AliceADVSettings;
+        const row = el("div", { class: "slider-row" });
+        const root = el("div", { class: "slider", "data-setting": key });
         const track = el("div", { class: "slider__track" });
+        const fill = el("div", { class: "slider__fill" });
         const thumb = el("div", { class: "slider__thumb" });
-        thumb.style.left = (value * 100) + "%";
-        track.appendChild(thumb);
+        track.appendChild(fill); track.appendChild(thumb);
         root.appendChild(track);
-        return root;
+        const readout = el("span", { class: "slider__value" });
+        row.appendChild(root); row.appendChild(readout);
+
+        const paint = function (v) {
+            const pct = Math.round(v * 100);
+            thumb.style.left = pct + "%";
+            fill.style.width = pct + "%";
+            readout.textContent = pct + "%";
+        };
+        const sync = function () { paint(S ? S.get(key) : 0.5); };
+        // 舞台是整体 scale() 缩放的，用 getBoundingClientRect 取到的就是屏幕实际坐标，
+        // 因此按 clientX 换算比例天然正确，不需要再除缩放系数。
+        const ratioAt = function (clientX) {
+            const r = track.getBoundingClientRect();
+            if (!r.width) return 0;
+            return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+        };
+        root.addEventListener("pointerdown", function (e) {
+            if (!S) return;
+            e.preventDefault();
+            if (root.setPointerCapture) { try { root.setPointerCapture(e.pointerId); } catch (err) {} }
+            S.set(key, ratioAt(e.clientX));
+            const move = function (ev) { S.set(key, ratioAt(ev.clientX)); };
+            const up = function () {
+                root.removeEventListener("pointermove", move);
+                root.removeEventListener("pointerup", up);
+                root.removeEventListener("pointercancel", up);
+            };
+            root.addEventListener("pointermove", move);
+            root.addEventListener("pointerup", up);
+            root.addEventListener("pointercancel", up);
+        });
+        sync();
+        if (S) S.onChange(function (k) { if (k === key) sync(); });
+        return row;
     }
 
     /* ---------- 3.3 章节选择 / 分支（数据来自 theme.json） ---------- */
@@ -606,10 +782,18 @@
         body.appendChild(grid);
     }
 
-    /* ---------- 3.5 关于页 ---------- */
-    function fillAbout(body, theme) {
+    /* ---------- 3.5 关于页 ----------
+     * 两层衬底，保证背景图不影响可读性：
+     *   ① 整页衬底（.page__tint，由 buildGameMenuPage 铺）；
+     *   ② 正文下底板（.about-panel），文字始终落在纯色上。
+     * 两层颜色都来自 theme.json 的 pages.about.backgroundColor / panelColor（默认值写在模板 theme.json，
+     * 构建时合并），支持 rgba()；未配置则不加内联样式，让 CSS 的兜底生效。 */
+    function fillAbout(body, theme, cfg) {
         const info = theme.info || {};
         const aboutText = (theme.about || "").trim();
+        // 白色底板由 .game-menu__main 统一承担（--game-menu-panel，见 buildGameMenuPage）；
+        // 这里只做限宽容器，不再自带背景/阴影（否则会变成「白底上的白卡片」）。
+        const panel = el("div", { class: "about-panel" });
         const c = el("div", { class: "about-content" });
         c.appendChild(el("h2", { text: info.name || "游戏名" }));
         if (info.version) c.appendChild(el("div", { class: "ver", text: "游戏版本 " + info.version }));
@@ -623,7 +807,8 @@
         } else {
             c.appendChild(el("p", { text: "本程序使用了由若干许可证授权的免费软件。" }));
         }
-        body.appendChild(c);
+        panel.appendChild(c);
+        body.appendChild(panel);
     }
 
     /* ---------- 3.6 入口：fillPageBody ---------- */
@@ -635,7 +820,7 @@
             case "page_chapters": return fillChapterList(body, theme);
             case "page_branches": return fillBranchList(body, theme);
             case "page_gallery":  return fillGallery(body, theme);
-            case "page_about":    return fillAbout(body, theme);
+            case "page_about":    return fillAbout(body, theme, cfg);
         }
     }
 
@@ -789,6 +974,10 @@
     function buildAll(theme, catalog) {
         CATALOG = catalog || {};
         lastTheme = theme;
+        // 容器类名兜底：style/pages/*.css 的页面级规则以 .page_<名> 作作用域，
+        // 外壳 HTML 少写该类名时整页样式会静默失效（踩过：save/load/about 差异化样式全没生效），
+        // 这里按 id 统一补齐。
+        document.querySelectorAll(".page[id^='page_']").forEach(n => n.classList.add(n.id));
         applyThemeVars(theme);
         buildTitlePage(theme);
         buildStagePage(theme);

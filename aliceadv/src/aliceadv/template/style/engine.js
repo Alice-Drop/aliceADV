@@ -13,8 +13,9 @@
         "page_stage", "page_gallery", "page_about"
     ];
 
-    const DESIGN_W = 1920;
-    const DESIGN_H = 1080;
+    /* 设计分辨率**不在这里写死**：它来自 theme.json 的 screen.designWidth / designHeight，
+     * 由 theme.js 写入 CSS 变量 --design-w / --design-h，并作用在 #stage 的 width/height 上。
+     * fitStage() 直接量 #stage 的布局尺寸即可，这样设计分辨率只有一份来源。 */
 
     const state = {
         currentPage: "page_title",
@@ -235,14 +236,19 @@
     }
 
     /* ---------- 0. 舞台等比缩放 ----------
-     * #stage 固定 1920×1080 设计分辨率，按窗口大小整体缩放，
-     * 保持 16:9 比例并居中，溢出区域由 #game-frame 的背景色填充。
+     * #stage 的宽高就是 theme.json 的 screen.designWidth × designHeight
+     * （theme.js 写 --design-w / --design-h，base.css 里 #stage 用这两个变量定尺寸）。
+     * 这里量它的布局尺寸作为缩放基准，不再各存一份 1920×1080 常量——
+     * 否则作者把 designWidth 改成 1280 时，CSS 侧按 1280 排、这里却按 1920 缩，画面会整体放大并被裁掉。
+     * offsetWidth/offsetHeight 取的是布局尺寸（不含 transform），正是我们要的基准。
      */
     function fitStage() {
         const frame = document.getElementById("game-frame");
         const stage = document.getElementById("stage");
         if (!frame || !stage) return;
-        const scale = Math.min(frame.clientWidth / DESIGN_W, frame.clientHeight / DESIGN_H);
+        const w = stage.offsetWidth || 1920;   // 兜底：主题未就绪时用引擎默认设计宽度
+        const h = stage.offsetHeight || 1080;
+        const scale = Math.min(frame.clientWidth / w, frame.clientHeight / h);
         stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
 

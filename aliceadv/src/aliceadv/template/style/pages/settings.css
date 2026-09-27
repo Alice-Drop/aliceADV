@@ -1,33 +1,221 @@
 /* =========================================================
  * page_settings — 环境设定
- * 显示模式 / Rollback Side / 快进模式（按钮组 + 复选框）
- * 文字速度 / 自动等待 / 音量（滑块，来自 base.css .slider）
+ *
+ * 分区卡片 + 两列字段网格；控件一律做成按钮形态：
+ *   分段按钮 .seg__btn  —— 单选（显示模式 / Rollback Side）
+ *   开关按钮 .chip      —— 布尔项（快进模式各开关 / 全部静音）
+ *   滑块     .slider    —— 数值项（速度 / 音量），右侧读百分比
+ *
+ * 侧边栏属于 game-menu.css 的 .game-menu__sidebar，本文件不涉及。
  * ========================================================= */
 
-.settings-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 32px 60px;
-    align-items: start;
-    margin-top: 12px;
+.settings {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--design-h) * 14 / 1080);
+    padding-right: calc(var(--design-w) * 20 / 1920);
 }
-.settings-group { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- 分区卡片 ---------- */
+.settings-section {
+    position: relative;
+    padding: calc(var(--design-h) * 12 / 1080) calc(var(--design-w) * 28 / 1920);
+    background: rgba(255, 255, 255, 0.55);
+    border: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.22);
+    /* 上一行是兜底；下一行由 --color-accent 现算同样的 22% 淡色，
+     * 这样作者改 theme.json 的 colors.accent 时，这里的描边会跟着变色
+     * （不支持 color-mix 的浏览器会丢弃下一行，保留上一行）。 */
+    border-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    /* 左侧强调竖条：与页面强调色呼应，代替圆角做分区识别 */
+    border-left: calc(var(--design-w) * 4 / 1920) solid var(--color-accent);
+}
+.settings-section__title {
+    margin: 0 0 calc(var(--design-h) * 8 / 1080) 0;
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 22 / 1920);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--color-accent);
+}
+
+/* 两列字段网格；整行字段用 --full 独占一行 */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--design-h) * 12 / 1080) calc(var(--design-w) * 44 / 1920);
+    align-items: start;
+}
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--design-h) * 6 / 1080);
+    min-width: 0;
+}
+.settings-field--full { grid-column: 1 / -1; }
+
 .settings-label {
     font-family: var(--font-interface);
-    color: var(--color-accent);
-    font-size: var(--size-section-heading);
-    margin-bottom: 6px;
-}
-.settings-buttons { display: flex; flex-direction: column; gap: 10px; }
-.settings-buttons .paper-btn {
-    width: 100%;
-    justify-content: flex-start;
-    padding-left: calc(var(--design-w) * 28 / 1920);
     color: var(--color-idle);
     font-size: var(--size-interface);
+    line-height: 1.2;
 }
-.settings-buttons .paper-btn.is-current { color: var(--color-accent); font-weight: 600; }
-.settings-buttons .paper-btn--center { justify-content: center; padding-left: 0; }
+.settings-hint {
+    font-family: var(--font-interface);
+    color: var(--color-idle-small);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    line-height: 1.4;
+}
 
-/* 滑块下方留白，避免与下一行拥挤 */
-.settings-group .slider { margin-bottom: 6px; }
+/* ---------- 控件一：分段按钮（单选） ---------- */
+.seg {
+    display: inline-flex;
+    align-self: flex-start;
+    border: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.35);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    background: rgba(255, 255, 255, 0.7);
+    overflow: hidden;
+}
+.seg__btn {
+    min-width: calc(var(--design-w) * 132 / 1920);
+    height: calc(var(--design-h) * 42 / 1080);
+    padding: 0 calc(var(--design-w) * 24 / 1920);
+    border: none;
+    border-left: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.25);
+    border-left-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
+    background: transparent;
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: var(--color-idle);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.seg__btn:first-child { border-left: none; }
+.seg__btn:hover {
+    color: var(--color-hover);
+    background: rgba(59, 89, 152, 0.08);
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+.seg__btn.is-on {
+    background: var(--color-accent);
+    color: var(--color-paper);
+    font-weight: 600;
+}
+.seg__btn.is-on:hover { background: var(--color-accent-deep); color: var(--color-paper); }
+.seg__btn.is-disabled {
+    color: var(--color-insensitive);
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.04);
+}
+.seg__btn:focus-visible { outline: 2px dashed var(--color-hover); outline-offset: -3px; }
+
+/* ---------- 控件二：开关按钮（布尔项） ---------- */
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--design-w) * 14 / 1920);
+}
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--design-w) * 10 / 1920);
+    height: calc(var(--design-h) * 42 / 1080);
+    padding: 0 calc(var(--design-w) * 22 / 1920);
+    border: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.35);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    background: rgba(255, 255, 255, 0.7);
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: var(--color-idle);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover { color: var(--color-hover); border-color: var(--color-hover); }
+.chip__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: calc(var(--design-w) * 20 / 1920);
+    height: calc(var(--design-w) * 20 / 1920);
+    border: calc(var(--design-w) * 2 / 1920) solid var(--color-idle);
+    line-height: 1;
+}
+.chip.is-on {
+    border-color: var(--color-accent);
+    background: rgba(59, 89, 152, 0.12);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    color: var(--color-accent);
+    font-weight: 600;
+}
+.chip.is-on .chip__mark {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+}
+/* 勾选标记用 ::after 画，避免引入图标资源 */
+.chip.is-on .chip__mark::after {
+    content: "";
+    width: calc(var(--design-w) * 8 / 1920);
+    height: calc(var(--design-w) * 4 / 1920);
+    border-left: calc(var(--design-w) * 2 / 1920) solid var(--color-paper);
+    border-bottom: calc(var(--design-w) * 2 / 1920) solid var(--color-paper);
+    transform: rotate(-45deg) translate(1px, -1px);
+}
+.chip:focus-visible { outline: 2px dashed var(--color-hover); outline-offset: 2px; }
+
+/* ---------- 控件三：数值滑块 ---------- */
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--design-w) * 16 / 1920);
+}
+.slider {
+    flex: 1;
+    min-width: 0;
+    height: calc(var(--design-h) * 40 / 1080);
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    touch-action: none;
+}
+.slider__track {
+    position: relative;
+    width: 100%;
+    height: calc(var(--design-w) * 6 / 1920);
+    background: rgba(59, 89, 152, 0.25);
+    background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+.slider__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--color-accent);
+}
+.slider__thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(var(--design-w) * 22 / 1920);
+    height: calc(var(--design-w) * 22 / 1920);
+    background: var(--color-paper);
+    border: calc(var(--design-w) * 2 / 1920) solid var(--color-accent);
+    box-shadow: 0 calc(var(--design-h) * 2 / 1080) calc(var(--design-h) * 4 / 1080) rgba(0, 0, 0, 0.2);
+    cursor: grab;
+}
+.slider:hover .slider__thumb { background: #fff; }
+.slider__thumb:active { cursor: grabbing; }
+.slider__value {
+    flex: none;
+    min-width: calc(var(--design-w) * 62 / 1920);
+    text-align: right;
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: var(--color-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 静音：整区压暗并锁死交互（值保留，取消静音后原样恢复） */
+.settings-section.is-muted .slider-row {
+    opacity: 0.4;
+    pointer-events: none;
+}

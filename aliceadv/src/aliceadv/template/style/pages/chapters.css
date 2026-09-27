@@ -18,7 +18,7 @@
     padding: 14px 24px;
     cursor: pointer;
     font-family: var(--font-interface);
-    color: var(--color-text);
+    color: var(--color-interface);
     background-color: var(--color-paper);
     background-image: var(--paper-noise), linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(0, 0, 0, 0.04) 100%);
     transition: color 0.12s ease, transform 0.12s ease;

@@ -31,6 +31,11 @@
     --color-insensitive: #888888;
     --color-text: #402000;
     --color-interface: #404040;
+    /* 文字色分两个层级，别合并：
+     *   --color-text      = 正文（剧本台词、角色名、历史回看、关于页正文、存档摘要）
+     *   --color-interface = 界面（body 默认、菜单纸面板、按钮、列表项、存档槽元信息、提示条）
+     * 两者的默认值在模板 theme.json 的 colors.text / colors.interface，
+     * 此处只是 CSS 侧最后一道兜底。 */
     --color-paper: #FAF8F0;
     --color-paper-deep: #E8E2D0;
     --color-muted: #6080D0;
@@ -69,7 +74,7 @@ html, body {
     height: 100%;
     background: var(--overflow-color);
     font-family: var(--font-system);
-    color: var(--color-text);
+    color: var(--color-interface);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -125,7 +130,7 @@ html, body {
     background-image:
         var(--paper-noise),
         linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(0, 0, 0, 0.04) 100%);
-    color: var(--color-text);
+    color: var(--color-interface);
     font-family: var(--font-interface);
     isolation: isolate;
 }
@@ -165,7 +170,7 @@ html, body {
     cursor: pointer;
     user-select: none;
     font-family: var(--font-interface);
-    color: var(--color-text);
+    color: var(--color-interface);
     padding: 0;
     transition: transform 0.12s ease, color 0.12s ease;
 }
@@ -195,7 +200,7 @@ html, body {
     color: var(--color-hover);
     background-image: var(--gui-button-hover);
 }
-.paper-btn.is-selected { color: var(--color-accent); }
+.paper-btn.is-selected { color: var(--color-selected); }
 .paper-btn.is-current { color: var(--color-accent); font-weight: 600; }
 /* 按钮不保留纸感撕裂边（由按钮背景图负责外观） */
 .paper-btn::before, .paper-btn::after { display: none; }
@@ -217,7 +222,8 @@ html, body {
     z-index: 0;
 }
 .page__bg--solid {
-    background: linear-gradient(180deg, #f3ecd9 0%, #e7dfc6 100%);
+    /* 纯色兜底底纹取自主题纸色，而不是另写一份米黄字面量 */
+    background: linear-gradient(180deg, var(--color-paper) 0%, var(--color-paper-deep) 100%);
 }
 .page__overlay {
     position: absolute;
@@ -227,6 +233,16 @@ html, body {
     pointer-events: none;
 }
 .page__overlay--dim { background: rgba(0, 0, 0, 0.35); }
+
+/* 整页纯色衬底：压在页面背景图之上（z-index 1）、内容之下（.game-menu 为 2）。
+ * 颜色由 theme.js 按 theme.json 的 pages.<页>.backgroundColor 写在内联样式里（支持 rgba），
+ * 用于「背景图太花、正文直接贴上去不好读」的场合。默认只有关于页给一层半透明白。 */
+.page__tint {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
 
 /* ---------- 6. 共享组件：存档槽 (save / load 通用) ---------- */
 .slots-grid {
@@ -290,10 +306,12 @@ html, body {
 .slot__corner--bl { bottom: 10%; left: 10%; border-bottom-width: 2px; border-left-width: 2px; }
 .slot__corner--br { bottom: 10%; right: 10%; border-bottom-width: 2px; border-right-width: 2px; }
 
+/* 缩略图区：固定占槽位上部（top 10% ~ 62%），与底部 meta 区互不重叠。
+ * 此前 meta 用「bottom + 自适应高度」定位，三行文字会向上顶进缩略图（错位 bug）。 */
 .slot__thumb {
     position: absolute;
-    top: 12%; left: 12%; right: 12%; bottom: 30%;
-    background: #d4cdb8 center/cover no-repeat;
+    top: 10%; left: 10%; right: 10%; height: 52%;
+    background: var(--color-paper-deep) center/cover no-repeat;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -302,12 +320,14 @@ html, body {
     font-family: var(--font-interface);
     opacity: 0.6;
 }
+/* meta 区：固定高度（槽高的 26%），超出部分裁切，保证永远不与缩略图叠字 */
 .slot__meta {
     position: absolute;
-    bottom: 6%;
-    left: 8%; right: 8%;
+    left: 12%; right: 12%; bottom: 10%;
+    height: 26%;
+    overflow: hidden;
     text-align: left;
-    color: var(--color-text);
+    color: var(--color-interface);
     font-size: var(--size-slot);
     font-family: var(--font-interface);
     opacity: 0.85;
@@ -339,6 +359,9 @@ html, body {
     color: var(--color-idle);
     font-size: calc(var(--design-w) * 13 / 1920);
     opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .slot.is-empty .slot__thumb {
     background: transparent;
@@ -347,6 +370,26 @@ html, body {
     opacity: 0.5;
 }
 
+/* 悬停操作提示徽章（保存页 / 读档页共用，文案由 theme.js 按 isSave 生成）。
+ * 覆盖在缩略图区上，hover 时浮现；空槽在读档页没有徽章（不可读）。 */
+.slot__hint {
+    position: absolute;
+    top: 10%; left: 10%; right: 10%; height: 52%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--color-accent);
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    letter-spacing: 0.12em;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+.slot:hover .slot__hint { opacity: 1; }
+
 /* 翻页器 */
 .page-jumper {
     display: flex;
@@ -354,7 +397,7 @@ html, body {
     align-items: center;
     gap: calc(var(--design-w) * 6 / 1920);
     padding: calc(var(--design-h) * 14 / 1080) 0 0 0;
-    color: var(--color-accent);
+    color: var(--color-muted);
     font-family: var(--font-interface);
 }
 .page-jumper .pj-num {
@@ -366,7 +409,7 @@ html, body {
     font-size: calc(var(--design-w) * 18 / 1920);
 }
 .page-jumper .pj-num.is-current { color: var(--color-accent-deep); font-weight: 600; }
-.page-jumper .pj-num:hover { color: var(--color-hover); }
+.page-jumper .pj-num:hover { color: var(--color-hover-muted); }
 
 /* ---------- 7. 共享组件：复选框 ---------- */
 .checkbox {
@@ -461,7 +504,7 @@ html, body {
 .no-theme-note__box {
     max-width: calc(var(--design-w) * 560 / 1920);
     padding: calc(var(--design-h) * 28 / 1080) calc(var(--design-w) * 36 / 1920);
-    color: var(--color-text);
+    color: var(--color-interface);
     font-family: var(--font-interface);
     font-size: calc(var(--design-w) * 18 / 1920);
     line-height: 1.7;

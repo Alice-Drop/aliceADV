@@ -295,7 +295,7 @@
 .notify__inner {
     padding: calc(var(--design-h) * 6 / 1080) calc(var(--design-w) * 18 / 1920);
     font-family: var(--font-interface);
-    color: var(--color-text);
+    color: var(--color-interface);
     font-size: var(--size-notify);
     min-width: calc(var(--design-w) * 240 / 1920);
     text-align: center;

@@ -1,7 +1,16 @@
 /* =========================================================
  * page_about — 关于
  * 游戏名 / 版本 / 引擎信息 / 许可证说明。
+ * 两层衬底是所有菜单页的共享默认，实现在 buildGameMenuPage + game-menu.css：
+ *   ① 整页 .page__tint —— gameMenu.backgroundColor（半透明白）；
+ *   ② 主内容 .game-menu__main —— gameMenu.panelColor（不透明白）。
+ * 默认值唯一来源是模板 theme.json 的 gameMenu（构建时与工程 theme.json 深度合并），CSS 不另写兜底色。
+ * 本文件只负责关于页的版式（限宽等）。
  * ========================================================= */
+
+.about-panel {
+    max-width: 980px;
+}
 
 .about-content {
     font-family: var(--font-interface);

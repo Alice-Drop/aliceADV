@@ -5,11 +5,12 @@
 
 #page_title { font-family: var(--font-interface); }
 
-/* 背景兜底：即使背景图缺失也不至于黑屏 */
+/* 背景兜底：没配 pages.title.background 时用主题色拼一层底纹，不至于黑屏。
+ * 颜色走 CSS 变量（而不是写死某个蓝），工程改 colors.paper / paperDeep 即跟着变。 */
 #page_title .title-bg {
     position: absolute; inset: 0; z-index: 0;
-    background-color: #9bb8e8;
-    background-image: linear-gradient(135deg, #bcd2f5 0%, #7e9fd8 100%);
+    background-color: var(--color-paper);
+    background-image: linear-gradient(135deg, var(--color-paper) 0%, var(--color-paper-deep) 100%);
     background-size: cover;
     background-position: center;
 }

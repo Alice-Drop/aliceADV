@@ -98,7 +98,8 @@
             "padY":   "2.4em",
             "padTop": "2.4em",
             "padBottom": "2.4em",
-            "justify": "center"
+            "justify": "center",
+            "textAlign": "left"
         },
         "name": {
             "left": 0.03,
@@ -149,8 +150,14 @@
     },
     "about": "本程序使用了由若干许可证授权的免费软件。\naliceADV 是一个参考 Ren'Py 设计语言的 ADV 游戏引擎示例。",
 
+    "gameMenu": {
+        "_comment": "游戏内菜单页（sidebar 里的各页：保存/读取/设置/章节选择/剧情分支/画廊/关于）的共享外观默认值。backgroundColor = 整页半透明衬底（铺在背景图之上、内容之下，压淡底图）；panelColor = 侧栏与主内容两块面板的底色（略微透明，让底图淡淡透出）。两者都支持 rgba()。此处即引擎默认值（构建时与工程 theme.json 深度合并，工程没写就用这里的；写 null 表示不要该层）。单个页面可在 pages.<页>.backgroundColor / panelColor 里覆盖。",
+        "backgroundColor": "rgba(255, 255, 255, 0.4)",
+        "panelColor": "rgba(255, 255, 255, 0.85)"
+    },
+
     "sidebar": [
-        "history", "save", "load", "settings",
+        "save", "load", "settings",
         "chapters", "gallery", "branches", "about", "back"
     ],
 
@@ -174,7 +181,7 @@
         },
         "load": {
             "background": "gui/game_menu.png",
-            "title":      "读档",
+            "title":      "读取",
             "titleEn":    "Load",
             "slotRows":   2,
             "slotCols":   3
@@ -205,7 +212,8 @@
             "cols":       4
         },
         "about": {
-            "background": "gui/main_menu.png"
+            "background": "gui/main_menu.png",
+            "_comment": "两层衬底的默认值已移到顶层 gameMenu（所有菜单页共享）；本页如需不同可在此覆盖 backgroundColor / panelColor，写 null 关闭该层。"
         }
     }
 }

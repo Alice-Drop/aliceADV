@@ -2,38 +2,64 @@
  * 游戏内菜单页通用外壳
  * save / load / settings / chapters / branches / gallery / about
  * 共用这套「侧边栏 + 主区」双栏布局。
+ *
+ * 两块衬底：侧栏与主内容各是一块面板，底色同为 --game-menu-panel
+ * （来自 theme.json 的 gameMenu.panelColor，默认「略微透明的白」）。
+ * 页面四周（侧栏外侧 / 主区外侧）留出较宽的空白，露出整页衬底 .page__tint。
  * ========================================================= */
 
 .game-menu {
     display: grid;
-    grid-template-columns: 22% 1fr;
+    grid-template-columns: var(--menu-side-w) 1fr;
     height: 100%;
     position: relative;
     z-index: 2;
 }
 
-/* 侧边栏停靠方向：theme.js 依据 theme.sidebarSide 给 .game-menu 加
- * game-menu--sidebar-left / -right。
- * left（默认）：sidebar 在第 1 列、main 在第 2 列、分隔线在 22% 处。
- * right：左右翻转（sidebar 在第 2 列、main 在第 1 列、分隔线在右侧 22% 处）。 */
-.game-menu--sidebar-left  { grid-template-columns: 22% 1fr; }
-.game-menu--sidebar-left  .game-menu__sidebar { grid-column: 1; }
-.game-menu--sidebar-left  .game-menu__main    { grid-column: 2; }
-.game-menu--sidebar-left  .game-menu__divider { left: 22%; right: auto; }
-
-.game-menu--sidebar-right { grid-template-columns: 1fr 22%; }
-.game-menu--sidebar-right .game-menu__sidebar { grid-column: 2; }
-.game-menu--sidebar-right .game-menu__main    { grid-column: 1; }
-.game-menu--sidebar-right .game-menu__divider { right: 22%; left: auto; }
-.game-menu--sidebar-right .game-menu__sidebar {
-    padding-left: calc(var(--design-w) * 30 / 1920);
-    padding-right: calc(var(--design-w) * 50 / 1920);
+/* 版式尺度 token（设计像素，1920×1080 基准）：
+ *   --menu-side-w  侧栏列宽（收窄，给外侧留白腾地方）
+ *   --menu-pad-x   页面左右外侧留白（侧栏左边 / 主区右边）
+ *   --menu-pad-y   页面上下留白
+ *   --menu-gap     两块衬底之间的缝（分隔线落在缝中间）
+ * 必须同时挂在分隔线上：分隔线是 .game-menu 的**兄弟节点**（直接挂在页面根上），
+ * 只写 .game-menu 的话它继承不到这些变量，`left: var(--menu-side-w)` 会整条失效（踩过）。 */
+.game-menu,
+.game-menu__divider {
+    --menu-side-w: 16%;
+    --menu-pad-x: calc(var(--design-w) * 56 / 1920);
+    --menu-pad-y: calc(var(--design-h) * 32 / 1080);
+    --menu-gap: calc(var(--design-w) * 18 / 1920);
 }
 
-/* 侧边栏：竖向按钮列表 + 返回按钮 */
+/* 侧边栏停靠方向：theme.js 依据 theme.sidebarSide 给 .game-menu 加
+ * game-menu--sidebar-left / -right。
+ * left（默认）：sidebar 在第 1 列、main 在第 2 列、分隔线在左侧。
+ * right：左右翻转（sidebar 在第 2 列、main 在第 1 列、分隔线在右侧）。
+ * 两侧留白（pad-x）始终落在「外侧」：左侧栏靠左、右侧栏靠右。 */
+.game-menu--sidebar-left,
+.game-menu--sidebar-right { grid-template-columns: var(--menu-side-w) 1fr; }
+.game-menu--sidebar-right { grid-template-columns: 1fr var(--menu-side-w); }
+
+.game-menu--sidebar-left  .game-menu__sidebar { grid-column: 1; }
+.game-menu--sidebar-left  .game-menu__main    { grid-column: 2; }
+.game-menu--sidebar-left  .game-menu__divider { left: var(--menu-side-w); right: auto; }
+
+.game-menu--sidebar-right .game-menu__sidebar { grid-column: 2; }
+.game-menu--sidebar-right .game-menu__main    { grid-column: 1; }
+.game-menu--sidebar-right .game-menu__divider { right: var(--menu-side-w); left: auto; }
+
+/* 面板内缩：外侧给 pad-x、靠分隔线一侧给 gap/2 */
+.game-menu--sidebar-left  .game-menu__sidebar { margin: var(--menu-pad-y) var(--menu-gap) var(--menu-pad-y) var(--menu-pad-x); }
+.game-menu--sidebar-left  .game-menu__main    { margin: var(--menu-pad-y) var(--menu-pad-x) var(--menu-pad-y) var(--menu-gap); }
+.game-menu--sidebar-right .game-menu__sidebar { margin: var(--menu-pad-y) var(--menu-pad-x) var(--menu-pad-y) var(--menu-gap); }
+.game-menu--sidebar-right .game-menu__main    { margin: var(--menu-pad-y) var(--menu-gap) var(--menu-pad-y) var(--menu-pad-x); }
+
+/* 侧边栏：竖向按钮列表 + 返回按钮。它自己也是一块衬底面板（与主内容一致）。 */
 .game-menu__sidebar {
     position: relative;
-    padding: calc(var(--design-h) * 80 / 1080) calc(var(--design-w) * 30 / 1920) calc(var(--design-h) * 30 / 1080) calc(var(--design-w) * 50 / 1920);
+    background: var(--game-menu-panel, transparent);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+    padding: calc(var(--design-h) * 56 / 1080) calc(var(--design-w) * 22 / 1920) calc(var(--design-h) * 28 / 1080) calc(var(--design-w) * 22 / 1920);
     display: flex;
     flex-direction: column;
     gap: calc(var(--design-h) * 10 / 1080);
@@ -41,8 +67,12 @@
 }
 .game-menu__sidebar .paper-btn {
     width: 100%;
+    /* 解除全局 .paper-btn 的 min-width（280 设计px，那是给首页大按钮的下限）。
+     * 侧栏按钮只有几个字的导航文字，需要跟着收窄的侧栏走；不解除就会溢出面板。 */
+    min-width: 0;
     justify-content: flex-start;
-    padding-left: calc(var(--design-w) * 28 / 1920);
+    padding-left: calc(var(--design-w) * 24 / 1920);
+    padding-right: calc(var(--design-w) * 20 / 1920);
     font-size: var(--size-interface);
 }
 .game-menu__sidebar .back-btn {
@@ -50,10 +80,12 @@
     color: var(--color-accent);
 }
 
-/* 主区：标题 + 主体内容 */
+/* 主区：标题 + 主体内容，同样是一块衬底面板（颜色来自 --game-menu-panel）。 */
 .game-menu__main {
     position: relative;
-    padding: calc(var(--design-h) * 80 / 1080) calc(var(--design-w) * 60 / 1920) calc(var(--design-h) * 30 / 1080) calc(var(--design-w) * 30 / 1920);
+    background: var(--game-menu-panel, transparent);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+    padding: calc(var(--design-h) * 52 / 1080) calc(var(--design-w) * 56 / 1920) calc(var(--design-h) * 30 / 1080) calc(var(--design-w) * 32 / 1920);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -76,15 +108,17 @@
     letter-spacing: 0.1em;
 }
 
-/* 分隔线（侧边栏与主区之间） */
+/* 分隔线（两块衬底之间的缝里）
+ * z-index 3：必须高于整页衬底 .page__tint（1）与内容层 .game-menu（2），否则会被衬底盖住。 */
 .game-menu__divider {
     width: 1px;
     background: var(--color-accent);
     opacity: 0.5;
     position: absolute;
-    left: 22%;
-    top: calc(var(--design-h) * 60 / 1080);
-    bottom: calc(var(--design-h) * 40 / 1080);
+    left: var(--menu-side-w);
+    top: calc(var(--design-h) * 100 / 1080);
+    bottom: calc(var(--design-h) * 76 / 1080);
+    z-index: 3;
 }
 
 /* 主体内容容器默认纵向滚动 */

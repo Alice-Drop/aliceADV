@@ -23,13 +23,13 @@
 .gallery-item:hover { transform: scale(1.03); }
 .gallery-item__img {
     position: absolute; inset: 6%;
-    background: #d4cdb8 center/cover no-repeat;
+    background: var(--color-paper-deep) center/cover no-repeat;
 }
 .gallery-item__label {
     position: absolute; left: 0; right: 0; bottom: 6%;
     text-align: center;
     font-family: var(--font-interface);
-    color: var(--color-text);
+    color: var(--color-interface);
     font-size: calc(var(--design-w) * 16 / 1920);
 }
 .gallery-item.is-locked { opacity: 0.35; pointer-events: none; }

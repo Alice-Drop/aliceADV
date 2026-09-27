@@ -4,11 +4,27 @@
  * 读档页中「空槽」不可点，通过禁用态弱化。
  * ========================================================= */
 
+/* 标题下强调色短线：读档页为半透明细线（读取 = 弱操作，与保存页区分） */
 .page_load .game-menu__title { color: var(--color-accent); }
-
-/* 空槽在读档页中表现为不可选（引擎层面也拦截点击） */
-.page_load .slot.is-empty {
-    cursor: not-allowed;
-    opacity: 0.55;
+.page_load .game-menu__title::after {
+    content: "";
+    display: block;
+    width: calc(var(--design-w) * 72 / 1920);
+    height: calc(var(--design-h) * 3 / 1080);
+    margin-top: calc(var(--design-h) * 10 / 1080);
+    background: var(--color-accent);
+    opacity: 0.35;
 }
+
+/* 空槽在读档页中表现为不可选（引擎层面也拦截点击）。
+ * 只淡化内容（角标记 / 缩略图文字），保留槽位纸面不透明——
+ * 整槽 opacity 会让页面背景透过纸面，视觉上发脏。 */
+.page_load .slot.is-empty { cursor: not-allowed; }
+.page_load .slot.is-empty .slot__thumb,
+.page_load .slot.is-empty .slot__corner { opacity: 0.35; }
 .page_load .slot.is-empty:hover { transform: none; box-shadow: none; }
+
+/* 读档页：已占用槽位悬停时整体点亮，与「覆盖保存」的描边高亮区分 */
+.page_load .slot:not(.is-empty):hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}

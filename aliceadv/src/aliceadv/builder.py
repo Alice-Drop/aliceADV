@@ -53,8 +53,11 @@ def _safe_clear_directory(target):
             print("  ! 清理 %s 失败: %s" % (p, e))
 
 
-def rel(v, fallback):
-    """数字(0~1) → 百分比字符串；字符串 → 原样透传；None → fallback。"""
+def rel(v, fallback=None):
+    """数字(0~1) → 百分比字符串；字符串 → 原样透传；None → fallback（默认 None）。
+
+    返回 None 表示「这一项没有值」，调用方应**跳过**该行，而不是写一个兜底字面量：
+    默认值的唯一来源是模板 theme.json，最后一道兜底在 CSS 的 var(--x, 默认) 里。"""
     if v is None:
         return fallback
     if isinstance(v, (int, float)):
@@ -62,11 +65,19 @@ def rel(v, fallback):
     return str(v)
 
 
-def camel2(s):
-    out = []
-    for i, part in enumerate(s.replace("-", "_").split("_")):
-        out.append(part if i == 0 else part[:1].upper() + part[1:])
-    return "".join(out)
+_KEBAB_RE = re.compile(r"([a-z0-9])([A-Z])")
+
+
+def css_name(s):
+    """字段名 → CSS 变量名：统一 kebab-case。
+
+    CSS 侧的既有约定就是 kebab（--color-accent-deep / --size-page-heading），
+    若按驼峰拼名字（--color-accentDeep），就会出现「构建写一个名、CSS 读另一个名」的错位，
+    theme.json 里的驼峰键（accentDeep / idleSmall / pageHeading / sectionHeading）会静默失效。
+
+    本函数必须与 template/style/theme.js 的 cssName() 保持一致——两处都在写同一批变量，
+    构建期写进 theme.built.css，运行期写进 documentElement 的内联样式。"""
+    return _KEBAB_RE.sub(r"\1-\2", str(s).replace("_", "-")).lower()
 
 
 def build_css_vars(theme):
@@ -75,13 +86,15 @@ def build_css_vars(theme):
     # 字号：基于设计宽度 1920 的比例（输出为 px，由 #stage transform 整体缩放）
     sizes = theme.get("sizes", {})
     for k, v in sizes.items():
-        lines.append(f"  --size-{k}: calc(var(--design-w) * {v} / 1920);")
+        if k.startswith("_"):
+            continue
+        lines.append(f"  --size-{css_name(k)}: calc(var(--design-w) * {v} / 1920);")
 
-    # 颜色（跳过 _comment 等内部说明键）
+    # 颜色（跳过 _comment 等内部说明键；键名 kebab 化，见 css_name 的说明）
     for k, v in theme.get("colors", {}).items():
         if k.startswith("_"):
             continue
-        lines.append(f"  --color-{camel2(k)}: {v};")
+        lines.append(f"  --color-{css_name(k)}: {v};")
 
     # 字体（支持字符串栈 或 对象形态 {family, src, fallbacks}）
     for k, v in theme.get("fonts", {}).items():
@@ -99,64 +112,75 @@ def build_css_vars(theme):
 
     # 屏幕
     sc = theme.get("screen", {})
+    # 宽高比：不参与布局计算（#stage 的尺寸由 --design-w/--design-h 决定），仅供自行引用。
     if sc.get("aspect"):
         lines.append(f"  --aspect: {sc['aspect'].replace(':', ' / ')};")
     if sc.get("designWidth"):
         lines.append(f"  --design-w: {sc['designWidth']}px;")
-        lines.append(f"  --design-w-px: {sc['designWidth']}px;")
     if sc.get("designHeight"):
         lines.append(f"  --design-h: {sc['designHeight']}px;")
-        lines.append(f"  --design-h-px: {sc['designHeight']}px;")
     if sc.get("overflowColor"):
         lines.append(f"  --overflow-color: {sc['overflowColor']};")
 
-    # 存档槽
+    # 存档槽：不写死 cols / 宽高比，没配就不写（CSS 侧 var(--slot-cols, 3) 等负责兜底）
     slot = theme.get("slot")
     if slot:
-        lines.append(f"  --slot-cols: {slot.get('cols', 3)};")
-        lines.append(f"  --slot-aspect: {slot.get('width', 414)} / {slot.get('height', 309)};")
+        if slot.get("cols") is not None:
+            lines.append(f"  --slot-cols: {slot['cols']};")
+        if slot.get("width") is not None and slot.get("height") is not None:
+            lines.append(f"  --slot-aspect: {slot['width']} / {slot['height']};")
 
     if theme.get("notifyYpos") is not None:
         lines.append(f"  --notify-ypos: {theme['notifyYpos']};")
     if theme.get("skipYpos") is not None:
         lines.append(f"  --skip-ypos: {theme['skipYpos']};")
 
-    # 布局自由度（相对值 → 百分比 / em）
+    # 布局自由度（相对值 → 百分比 / em）。
+    # 这里**不写任何字面兜底默认值**：默认值的唯一来源是模板 theme.json
+    # （build 时 _deep_merge(模板, 工程) 已合并进来），最后一道兜底写在 CSS 的 var(--x, 默认) 里。
+    # 在构建脚本里再抄一份 '5%' / '3.4em'，就是同一份默认值的第三处副本——
+    # 改模板却漏改这里，就会出现「模板改了、页面没变」的假象。
+    def add(name, val):
+        if val is None:
+            return
+        lines.append(f"  {name}: {val};")
+
     L = theme.get("layout", {})
     d = L.get("dialogue", {})
-    lines.append(f"  --dialogue-left: {rel(d.get('left'), '5%')};")
-    lines.append(f"  --dialogue-bottom: {rel(d.get('bottom'), '5%')};")
-    lines.append(f"  --dialogue-width: {rel(d.get('width'), '90%')};")
-    lines.append(f"  --dialogue-height: {rel(d.get('height'), '28%')};")
-    _padx = d.get('padX', '3.4em')
-    lines.append(f"  --dialogue-pad-x: {_padx};")
-    lines.append(f"  --dialogue-pad-left: {d.get('padLeft', _padx)};")
-    lines.append(f"  --dialogue-pad-right: {d.get('padRight', _padx)};")
-    lines.append(f"  --dialogue-pad-top: {d.get('padTop', d.get('padY', '2.4em'))};")
-    lines.append(f"  --dialogue-pad-bottom: {d.get('padBottom', d.get('padY', '2.4em'))};")
-    lines.append(f"  --dialogue-justify: {d.get('justify', 'center')};")
-    lines.append(f"  --dialogue-text-align: {d.get('textAlign', 'left')};")
+    add("--dialogue-left",   rel(d.get("left")))
+    add("--dialogue-bottom", rel(d.get("bottom")))
+    add("--dialogue-width",  rel(d.get("width")))
+    add("--dialogue-height", rel(d.get("height")))
+    # padX / padY 是「派生基准」（左右取 padX、上下取 padY），属于配置内部的继承关系，不是默认值
+    _padx = d.get("padX")
+    add("--dialogue-pad-x",      _padx)
+    add("--dialogue-pad-left",   d.get("padLeft", _padx))
+    add("--dialogue-pad-right",  d.get("padRight", _padx))
+    add("--dialogue-pad-top",    d.get("padTop", d.get("padY")))
+    add("--dialogue-pad-bottom", d.get("padBottom", d.get("padY")))
+    add("--dialogue-justify",    d.get("justify"))
+    add("--dialogue-text-align", d.get("textAlign"))
     n = L.get("name", {})
-    lines.append(f"  --name-left: {rel(n.get('left'), '3%')};")
-    lines.append(f"  --name-top: {rel(n.get('top'), '-7%')};")
+    add("--name-left", rel(n.get("left")))
+    add("--name-top",  rel(n.get("top")))
     s = L.get("sprite", {})
-    lines.append(f"  --sprite-bottom: {rel(s.get('bottom'), '0%')};")
-    lines.append(f"  --sprite-height: {rel(s.get('height'), 'auto')};")
+    add("--sprite-bottom", rel(s.get("bottom")))
+    add("--sprite-height", rel(s.get("height")))
     v = L.get("nvl", {})
-    lines.append(f"  --nvl-left: {rel(v.get('left'), '18.75%')};")
-    lines.append(f"  --nvl-width: {rel(v.get('width'), '62.5%')};")
-    lines.append(f"  --nvl-line-gap: {v.get('lineGap', '0.5em')};")
-    lines.append(f"  --nvl-justify: {v.get('justify', 'center')};")
-    lines.append(f"  --nvl-text-align: {v.get('textAlign', 'left')};")
+    add("--nvl-left",       rel(v.get("left")))
+    add("--nvl-width",      rel(v.get("width")))
+    add("--nvl-line-gap",   v.get("lineGap"))
+    add("--nvl-justify",    v.get("justify"))
+    add("--nvl-text-align", v.get("textAlign"))
     c = L.get("choice", {})
-    lines.append(f"  --choice-left: {rel(c.get('left'), '10%')};")
-    lines.append(f"  --choice-top: {rel(c.get('top'), '26%')};")
-    lines.append(f"  --choice-width: {rel(c.get('width'), '80%')};")
-    lines.append(f"  --choice-gap: {c.get('gap', '1.2em')};")
-    lines.append(f"  --choice-max-width: {c.get('maxWidth', '60%')};")
+    add("--choice-left",      rel(c.get("left")))
+    add("--choice-top",       rel(c.get("top")))
+    add("--choice-width",     rel(c.get("width")))
+    add("--choice-gap",       c.get("gap"))
+    add("--choice-max-width", c.get("maxWidth"))
     t = L.get("toolbar", {})
-    lines.append(f"  --toolbar-height: {t.get('height', '6.5em')};")
-    lines.append(f"  --toolbar-gap: {t.get('gap', '2em')};")
+    add("--toolbar-height", t.get("height"))
+    add("--toolbar-gap",    t.get("gap"))
 
     lines.append("}")
     return "\n".join(lines)

@@ -73,12 +73,12 @@ def js_vars_written(path):
 def builder_vars_written(path):
     """从 builder.py 源码静态提取 build_css_vars 里所有写入的 --dialogue-* 变量名。
 
-    builder.py 用 f-string 拼装 CSS 行，两种形态都匹配：
-      lines.append(f"  --dialogue-pad-top: {d.get('padTop')};")
-      lines.append(f'  --dialogue-pad-top: {...};')
+    builder.py 现在用 add("--dialogue-x", 值) 追加行（值缺失就整行跳过，
+    不再写 '5%' 这类字面兜底），因此变量名以**带引号的字符串字面量**出现；
+    早期形态是 f-string 直接拼 "--dialogue-x: {值};"，故两种都匹配。
     """
     txt = read(path)
-    return set(re.findall(r"(--dialogue-[a-z-]+):", txt))
+    return set(re.findall(r"(--dialogue-[a-z-]+)(?=[\"':])", txt))
 
 
 # ---------------------------------------------------------------------------
