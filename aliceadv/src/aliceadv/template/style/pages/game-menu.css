@@ -3,14 +3,28 @@
  * save / load / settings / chapters / branches / gallery / about
  * 共用这套「侧边栏 + 主区」双栏布局。
  *
- * 两块衬底：侧栏与主内容各是一块面板，底色同为 --game-menu-panel
- * （来自 theme.json 的 gameMenu.panelColor，默认「略微透明的白」）。
+ * 衬底分三处（2026-09-27 起侧栏不再是整块面板，按钮自带底色）：
+ *   ① 主内容 .game-menu__main —— 一整块面板，底色 --game-menu-panel
+ *      （来自 theme.json 的 gameMenu.panelColor，默认「略微透明的白」）；
+ *   ② 侧栏 —— **本身无背景、无投影**（整块面板会让几个导航按钮与底部「返回」连成一片，
+ *      拆开才看得出是一个个独立按钮）；
+ *   ③ 每个侧栏按钮 —— **各自**的底色 --game-menu-sidebar-btn
+ *      （来自 gameMenu.sidebarButtonColor，默认纯白、完全不透明），
+ *      范围另由一条非黑描边（colors.muted）勾出。
  * 页面四周（侧栏外侧 / 主区外侧）留出较宽的空白，露出整页衬底 .page__tint。
  * ========================================================= */
 
 .game-menu {
     display: grid;
     grid-template-columns: var(--menu-side-w) 1fr;
+    /* 行高必须是**确定值**：只有一行，写成 minmax(0, 1fr) 就是「撑满 .game-menu 的高度」。
+     * 不写的话行是 auto，高度由内容决定 —— 一旦某一页的内容比可视区高（例：关于页那张
+     * 撑满高度的纸、或存档槽多到超出可视区），行就会被顶高，整个菜单溢出页面：
+     * 实测关于页会从 1080 涨到 2156，`height: 100%` 也退化成 auto（高度链断在这一环）。
+     * ⚠️ 必须写 `minmax(0, 1fr)` 而不是 `1fr`：`1fr` = `minmax(auto, 1fr)`，那个 **auto 下限
+     * 就是内容的 min-content 高度** → 内容高过可视区时行照样被顶高（踩过，改完没变化）。
+     * 内容超出该滚的就由 .game-menu__body / 纸自己滚（见各自的 overflow）。 */
+    grid-template-rows: minmax(0, 1fr);
     height: 100%;
     position: relative;
     z-index: 2;
@@ -20,7 +34,7 @@
  *   --menu-side-w  侧栏列宽（收窄，给外侧留白腾地方）
  *   --menu-pad-x   页面左右外侧留白（侧栏左边 / 主区右边）
  *   --menu-pad-y   页面上下留白
- *   --menu-gap     两块衬底之间的缝（分隔线落在缝中间）
+ *   --menu-gap     侧栏与主内容之间的缝（分隔线落在缝中间）
  * 必须同时挂在分隔线上：分隔线是 .game-menu 的**兄弟节点**（直接挂在页面根上），
  * 只写 .game-menu 的话它继承不到这些变量，`left: var(--menu-side-w)` 会整条失效（踩过）。 */
 .game-menu,
@@ -54,33 +68,61 @@
 .game-menu--sidebar-right .game-menu__sidebar { margin: var(--menu-pad-y) var(--menu-pad-x) var(--menu-pad-y) var(--menu-gap); }
 .game-menu--sidebar-right .game-menu__main    { margin: var(--menu-pad-y) var(--menu-gap) var(--menu-pad-y) var(--menu-pad-x); }
 
-/* 侧边栏：竖向按钮列表 + 返回按钮。它自己也是一块衬底面板（与主内容一致）。 */
+/* 侧边栏：竖向按钮列表 + 返回按钮。
+ * **侧栏本身不是衬底**（2026-09-27 用户要求）——整块面板会把几个导航按钮和底部「返回」
+ * 连成一片。这里保持无背景、也不要 box-shadow（没有底色的投影只是脏），底色交给每个按钮。 */
 .game-menu__sidebar {
     position: relative;
-    background: var(--game-menu-panel, transparent);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
-    padding: calc(var(--design-h) * 56 / 1080) calc(var(--design-w) * 22 / 1920) calc(var(--design-h) * 28 / 1080) calc(var(--design-w) * 22 / 1920);
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: calc(var(--design-h) * 10 / 1080);
+    gap: calc(var(--design-h) * 14 / 1080);
     z-index: 3;
 }
+/* 侧边栏按钮：**每个按钮各自的纯白底色 + 描边**（2026-09-27 定稿）。
+ * 底色来自 --game-menu-sidebar-btn（= theme.json 的 gameMenu.sidebarButtonColor，
+ * 默认 `#FFFFFF` **完全不透明**）：
+ *   ① 白色不透明 —— 去掉整块侧栏衬底后，按钮单独铺白才读得清（此前试过「半透明白」，
+ *      在饱和底图上会显得「太淡」；也试过 alpha=0，可读性不够）；
+ *   ② 再叠一条**非黑描边**（颜色取 `colors.muted`：模板 `#6080D0` / 本工程 `#666666`）
+ *      勾出按钮范围。宽度 2 设计px —— 1px 在复杂底图上会糊掉；
+ *   ③ 加大内边距 = 加大按钮「体积」。
+ * 底色写成 CSS 变量、不写死字面量：默认值唯一来源是模板 theme.json，
+ * 单个页面可用 pages.<页>.sidebarButtonColor 覆盖，写 null 则按钮回到「只有描边」。
+ * 注意底色**不会**被 `.paper-btn:hover` 抹掉：base.css 的 hover 只改 background-image
+ * （`--gui-button-hover`），本规则的特异性 (0,2,0) 与它相同而书写在后 → background-color 仍归本规则。
+ * height:auto：`.paper-btn` 原写死 `height: 64/1080`，而全局 `box-sizing: border-box`，
+ * 固定高度下再加纵向 padding 只会把文字区域挤扁，而不是把按钮撑高。 */
 .game-menu__sidebar .paper-btn {
     width: 100%;
     /* 解除全局 .paper-btn 的 min-width（280 设计px，那是给首页大按钮的下限）。
-     * 侧栏按钮只有几个字的导航文字，需要跟着收窄的侧栏走；不解除就会溢出面板。 */
+     * 侧栏按钮只有几个字的导航文字，需要跟着收窄的侧栏走；不解除就会溢出。 */
     min-width: 0;
+    height: auto;
+    background-color: var(--game-menu-sidebar-btn, #fff);
+    border: calc(var(--design-w) * 2 / 1920) solid var(--color-muted);
     justify-content: flex-start;
-    padding-left: calc(var(--design-w) * 24 / 1920);
-    padding-right: calc(var(--design-w) * 20 / 1920);
+    padding: calc(var(--design-h) * 22 / 1080) calc(var(--design-w) * 28 / 1920);
+    /* 标签用界面文字色（`--color-interface`，模板与工程都是 `#404040`），白底上是深灰、读得清。
+     * ⚠️ 在这里写 `color` 会**连带盖掉** `.paper-btn:hover` 与 `.paper-btn.is-current`：
+     * 它们与 `.paper-btn` 同处 (0,2,0) 档，而本规则写在 base.css **之后** → 同档时后者胜。
+     * 所以下面必须补回这两条更高特异性 (0,3,0) 的规则，且顺序保持「hover 在前、is-current 在后」
+     * （与 base.css 里 `.paper-btn:hover` → `.is-current` 的先后一致，悬停当前页时仍是加粗高亮胜出）。 */
+    color: var(--color-interface);
     font-size: var(--size-interface);
+    line-height: 1.4;
 }
+.game-menu__sidebar .paper-btn:hover { color: var(--color-hover); }
+.game-menu__sidebar .paper-btn.is-current { color: var(--color-accent); }
+
+/* 「返回」压在底部：margin-top:auto 把它推下去；flex gap 保证高度不够时也至少留一条缝，
+ * 所以任何窗口高度下它都不会与上面那组导航按钮连成一片。 */
 .game-menu__sidebar .back-btn {
     margin-top: auto;
     color: var(--color-accent);
 }
 
-/* 主区：标题 + 主体内容，同样是一块衬底面板（颜色来自 --game-menu-panel）。 */
+/* 主区：标题 + 主体内容，是**唯一**一块整块衬底面板（颜色来自 --game-menu-panel）。 */
 .game-menu__main {
     position: relative;
     background: var(--game-menu-panel, transparent);
@@ -108,7 +150,7 @@
     letter-spacing: 0.1em;
 }
 
-/* 分隔线（两块衬底之间的缝里）
+/* 分隔线（侧栏与主内容之间的缝里）
  * z-index 3：必须高于整页衬底 .page__tint（1）与内容层 .game-menu（2），否则会被衬底盖住。 */
 .game-menu__divider {
     width: 1px;

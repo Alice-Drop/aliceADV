@@ -21,8 +21,11 @@ gui2theme.py — Ren'Py gui.rpy → aliceADV theme.json 的「布局翻译器」
     textbox_yalign   → layout.dialogue.bottom   （1.0 贴底 → 0）
     dialogue_xpos    → layout.dialogue.padX     = xpos / W（百分比）
     dialogue_ypos    → layout.dialogue.padTop   = ypos px（设计像素，正文顶对齐）
+    dialogue_text_xalign → layout.dialogue.textAlign（词：left/center/right，喂 CSS text-align）
     name_xpos/ypos   → layout.name.left / top   （相对文本框）
+    name_xalign      → layout.name.anchor       （**锚点，0~1 小数**，喂 CSS transform）
     nvl_thought_*    → layout.nvl.left / width
+    nvl_thought_xalign → layout.nvl.textAlign   （词）
     choice_button_width / choice_spacing → layout.choice.width / gap
     text_size / name_text_size / choice_button_text_size → sizes.*
 """
@@ -102,10 +105,14 @@ def compute_layout(g):
     out["layout"]["dialogue"] = d
 
     # ---- 名字条（相对文本框） ----
+    # name_xalign 是**锚点**（Ren'Py 里是 xanchor），不是文本对齐：它决定名字框上的
+    # 哪个点贴在 name_xpos 上。所以这里保留原始小数（0 / 0.5 / 1 / 0.35 …），
+    # 不折算成 left/center/right 三个词——折算会把 0.35 这种中间值丢掉，
+    # 而引擎侧的 layout.name.anchor 就是按 0~1 消费的。
     out["layout"]["name"] = {
         "left": pct(g.get("name_xpos", 0), W),
         "top": pct(g.get("name_ypos", 0), max(h, 1)),
-        "align": align_word(g.get("name_xalign", 0.0)),
+        "anchor": g.get("name_xalign", 0.0),
     }
 
     # ---- NVL 整屏旁白 ----

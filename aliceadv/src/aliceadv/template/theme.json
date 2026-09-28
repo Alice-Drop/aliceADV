@@ -1,5 +1,5 @@
 {
-    "_comment": "aliceADV 用户配置。所有尺寸/位置均为相对值(0~1)，相对于 screen 的目标高宽，构建时翻译为百分比。这是用户自定义内容，模板(core/)不会写死默认。",
+    "_comment": "aliceADV 用户配置：本文件只描述**外观与界面**（尺寸/位置/颜色/字体/图片/页面布局/按钮可见性/界面文案），以及其它文件放不下的引擎级开关；不承载游戏内容。游戏内容各有其位：游戏名与版本在 info.json，关于页正文在 about.txt，剧本在 story/，图片音频在 gui|images|audio/。所有尺寸/位置均为相对值(0~1)，相对于 screen 的目标高宽，构建时翻译为百分比。",
     "screen": {
         "aspect": "16:9",
         "designWidth": 1920,
@@ -102,8 +102,10 @@
             "textAlign": "left"
         },
         "name": {
+            "_comment": "角色名框，相对文本框。anchor 是 Ren'Py gui.name_xalign 的等价物（0~1）：0=框左缘贴在 left 上、0.5=中点对齐、1=右缘对齐。",
             "left": 0.03,
-            "top":  -0.07
+            "top":  -0.07,
+            "anchor": 0
         },
         "sprite": {
             "bottom": 0.00,
@@ -144,16 +146,11 @@
     "notifyYpos": 68,
     "skipYpos": 15,
 
-    "info": {
-        "name":           "Example Game",
-        "version":        "1.0.0"
-    },
-    "about": "本程序使用了由若干许可证授权的免费软件。\naliceADV 是一个参考 Ren'Py 设计语言的 ADV 游戏引擎示例。",
-
     "gameMenu": {
-        "_comment": "游戏内菜单页（sidebar 里的各页：保存/读取/设置/章节选择/剧情分支/画廊/关于）的共享外观默认值。backgroundColor = 整页半透明衬底（铺在背景图之上、内容之下，压淡底图）；panelColor = 侧栏与主内容两块面板的底色（略微透明，让底图淡淡透出）。两者都支持 rgba()。此处即引擎默认值（构建时与工程 theme.json 深度合并，工程没写就用这里的；写 null 表示不要该层）。单个页面可在 pages.<页>.backgroundColor / panelColor 里覆盖。",
+        "_comment": "游戏内菜单页（sidebar 里的各页：保存/读取/设置/章节选择/剧情分支/画廊/关于）的共享外观默认值。backgroundColor = 整页半透明衬底（铺在背景图之上、内容之下，压淡底图）；panelColor = 主内容那一整块面板的底色（略微透明，让底图淡淡透出）；sidebarButtonColor = 侧栏每个按钮各自的底色（默认纯白、完全不透明，让按钮在任意背景图上都读得清）。三个键都支持 rgba()。此处即引擎默认值（构建时与工程 theme.json 深度合并，工程没写就用这里的；写 null 表示不要该层）。单个页面可在 pages.<页>.backgroundColor / panelColor / sidebarButtonColor 里覆盖。",
         "backgroundColor": "rgba(255, 255, 255, 0.4)",
-        "panelColor": "rgba(255, 255, 255, 0.85)"
+        "panelColor": "rgba(255, 255, 255, 0.85)",
+        "sidebarButtonColor": "#FFFFFF"
     },
 
     "sidebar": [
@@ -176,8 +173,7 @@
             "title":      "保存",
             "titleEn":    "Save",
             "slotRows":   2,
-            "slotCols":   3,
-            "autoSlots":  9
+            "slotCols":   3
         },
         "load": {
             "background": "gui/game_menu.png",
@@ -213,7 +209,7 @@
         },
         "about": {
             "background": "gui/main_menu.png",
-            "_comment": "两层衬底的默认值已移到顶层 gameMenu（所有菜单页共享）；本页如需不同可在此覆盖 backgroundColor / panelColor，写 null 关闭该层。"
+            "_comment": "衬底的默认值都在顶层 gameMenu（所有菜单页共享），本页如需不同可在此覆盖 backgroundColor / panelColor / sidebarButtonColor，写 null 关闭该层。注意本页版式特殊：正文按固定栏宽排成一列，白底只包住这一列并水平居中（见 style/pages/about.css 的 .page_about 一节），panelColor 就是这张纸的底色，主内容区在本页不铺底色、纸的左右两侧直接透出 backgroundColor 那一层。想改「一行放多少字」调 about.css 的 --about-sheet-content。"
         }
     }
 }

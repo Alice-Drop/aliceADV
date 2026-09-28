@@ -70,8 +70,12 @@
                 global.AliceADVScript.exit();
             }
         }
-        // 离开舞台时收起浮层
-        if (prev === "page_stage" && id !== "page_stage") closeOverlays();
+        // 离开舞台时收起浮层与通知条
+        // （通知条本来 1.6s 后自己消失；若这期间又回到舞台，会看到上一条消息的残影）
+        if (prev === "page_stage" && id !== "page_stage") {
+            closeOverlays();
+            clearNotify();
+        }
     }
 
     function goBack() {
@@ -93,6 +97,46 @@
         showPopup("popup_saveToast");
         if (saveToastTimer) clearTimeout(saveToastTimer);
         saveToastTimer = setTimeout(() => hidePopup("popup_saveToast"), 1600);
+    }
+
+    /* ---------- 通知条 / 快进指示条（对应 Ren'Py notify / skip_indicator） ----------
+     * 这两个元素由 theme.js 的 buildStagePage() 随舞台骨架建好，这里**不创建 DOM**：
+     * 舞台重建（换主题 / 重新 buildAll）会清空 #page_stage，自建的节点留不下来；
+     * 骨架每次重建都会带上它们，所以只在既有节点上切 .is-active 与文字最稳。
+     * 纵向位置由 theme.json 的 notifyYpos / skipYpos 决定（CSS 读 --notify-ypos / --skip-ypos）。
+     */
+    let notifyTimer = null;
+
+    /* 弹一条会在 ms（默认 1600）后自动消失的通知。循环调用时以最后一次为准（不排队）。 */
+    function notify(text, ms) {
+        const host = document.querySelector("#page_stage .notify");
+        const inner = host && host.querySelector(".notify__inner");
+        const msg = (text == null) ? "" : String(text);
+        if (!inner || !msg) return false;   // 无元素（舞台尚未搭好）或空文案 → 不显示空衬底
+        inner.textContent = msg;
+        host.classList.add("is-active");
+        if (notifyTimer) clearTimeout(notifyTimer);
+        notifyTimer = setTimeout(
+            () => host.classList.remove("is-active"),
+            (typeof ms === "number" && ms > 0) ? ms : 1600
+        );
+        return true;
+    }
+
+    function clearNotify() {
+        if (notifyTimer) { clearTimeout(notifyTimer); notifyTimer = null; }
+        const host = document.querySelector("#page_stage .notify");
+        if (host) host.classList.remove("is-active");
+    }
+
+    /* 快进指示条的显隐是 state.skip 的纯函数。唯一调用方是 script.js 的
+     * syncPlaybackMode()（setSkip / setAuto / stopPlayback 都汇到那里），
+     * 因此这里不判断播放状态、也不自己维护标志位。 */
+    function setSkipIndicator(on) {
+        const host = document.querySelector("#page_stage .skip-indicator");
+        if (!host) return false;
+        host.classList.toggle("is-active", !!on);
+        return true;
     }
 
     /* ---------- 1. 统一按钮事件代理 ---------- */
@@ -168,7 +212,11 @@
                 if (ok) showSaveToast();
             } else if (state.currentPage === "page_load") {
                 const data = (script && script.getSave) ? script.getSave(kind, idx) : null;
-                if (data && script) script.load(kind, idx);
+                // load() 是 async，返回是否真的读成功 —— 只有成功才给通知。
+                // 若无条件通知，则「关掉自动存档后点空槽」这类失败也会弹一条成功提示。
+                if (data && script) {
+                    script.load(kind, idx).then(ok => { if (ok) notify("已读取存档"); });
+                }
             }
             return;
         }
@@ -216,7 +264,10 @@
             case "save":  showPage("page_save");     break;
             case "load":  showPage("page_load");     break;
             case "qsave": if (script) { const ok = script.saveQuick(); if (ok) showSaveToast(); } break;
-            case "qload": if (script) script.loadQuick(); break;
+            case "qload":
+                // 与存档页读取同一套判据：loadQuick() 返回是否读成功（无快存 / 快存已关 = false）
+                if (script) script.loadQuick().then(ok => { if (ok) notify("已读取快速存档"); });
+                break;
         }
     }
 
@@ -298,5 +349,13 @@
         window.addEventListener("resize", fitStage);
     }
 
-    global.AliceADVEngine = { init, showPage, goBack, showPopup, hidePopup, state };
+    global.AliceADVEngine = {
+        init, showPage, goBack, showPopup, hidePopup, state,
+        // 通知条（Ren'Py renpy.notify 的对应物）：公开给剧本 / 工程自定义 UI 调用。
+        // 位置由 theme.json 的 notifyYpos 决定。
+        notify, clearNotify,
+        // 快进指示条：由 script.js 的 syncPlaybackMode() 按 state.skip 驱动，
+        // 工程一般不必直接调用（避免出现第二个真值源）。
+        setSkipIndicator
+    };
 })(window);

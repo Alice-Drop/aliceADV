@@ -19,6 +19,11 @@ from ._version import __version__
 
 ENGINE_NAME = "aliceADV"
 
+# 引擎仓库地址：关于页把「引擎名」做成指向它的链接。
+# 与 ENGINE_NAME 放在一起是刻意的——仓库 URL 只此一处，构建时随 window.__ENGINE__ 一起内联，
+# 运行时 JS 与 CSS 里都不再写第二份（写两份就会出现「改名/换仓库后有一处忘改」的静默失效）。
+ENGINE_REPO = "https://github.com/Alice-Drop/aliceADV"
+
 # 引擎展示版本：产物「关于」页、标题页与命令行 --version 显示的就是它。
 # 默认由包版本加前缀 v 派生，保证全引擎只有一个版本号。
 # 若某次需要让展示版本与包版本脱钩（例如带上 beta 标记），在本行显式覆盖即可，
@@ -55,4 +60,5 @@ __all__ = [
     "__version__",
     "ENGINE_VERSION",
     "ENGINE_NAME",
+    "ENGINE_REPO",
 ]

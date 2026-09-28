@@ -1,15 +1,68 @@
 /* =========================================================
  * page_about — 关于
- * 游戏名 / 版本 / 引擎信息 / 许可证说明。
- * 两层衬底是所有菜单页的共享默认，实现在 buildGameMenuPage + game-menu.css：
- *   ① 整页 .page__tint —— gameMenu.backgroundColor（半透明白）；
- *   ② 主内容 .game-menu__main —— gameMenu.panelColor（不透明白）。
- * 默认值唯一来源是模板 theme.json 的 gameMenu（构建时与工程 theme.json 深度合并），CSS 不另写兜底色。
- * 本文件只负责关于页的版式（限宽等）。
+ * 游戏名 / 版本 / 引擎信息 / 正文（来自工程根 about.txt，空行分段）。
+ *
+ * 版式（2026-09-28 定稿）：正文按**固定栏宽**排成一列，白底（纸）**只包住这一列**、
+ * 不铺满主区，整块纸在侧栏右侧的区域里**水平居中**；纸的左右两侧不放任何面板，
+ * 直接看到 .page__tint 那层 0.4 衬底（用户要求「文本两面没有东西」）。
+ * 做法是把「白底」从主内容区挪到纸本身：
+ *   .page_about .game-menu__main → 去掉背景 / 投影 / 内边距（白底不再铺满整个主区）
+ *   .page_about .game-menu__body → 只负责把纸居中，自己不再滚动
+ *   .page_about .about-panel     → 纸：白底 + 纸宽包住正文栏 + 文字在纸内滚动
+ *
+ * ⚠️ 纸宽**由正文栏宽决定**（`content + 2 × pad-x`），**不要用 aspect-ratio 定 A4 比例**。
+ * 2026-09-27 曾用「纸高 × A4 比例」算纸宽：纸高 968 固定 → 纸宽被锁成 684 → 扣掉内边距
+ * 只剩 572，换行位置相对原版（限宽 900）全面错位。用户看到的现象是「文字被放大了」，
+ * 其实字号一个字都没改（工程 sizes.interface = 33 从头到尾没变），**变的是栏宽**。
+ * 栏宽必须留在 900 这一档，换行才能与原版逐字一致。
+ *
+ * 纸的底色仍取 --game-menu-panel（= gameMenu.panelColor），所以把它写成 null 依旧能关掉白底。
+ * 默认值唯一来源仍是模板 theme.json 的 gameMenu，CSS 只留 var() 兜底。
  * ========================================================= */
 
-.about-panel {
-    max-width: 980px;
+.page_about {
+    /* 正文栏宽。原版是 .about-content 的 `max-width: 900px`，这一档决定每行放多少字，
+     * 必须与原版一致，所以固定住（按设计宽度写成比例，等价于 900px）。 */
+    --about-sheet-content: calc(var(--design-w) * 900 / 1920);
+    /* 纸四周留白：让纸作为「一张纸」浮在衬底上（设 0 就上下贴边） */
+    --about-sheet-gap: calc(var(--design-h) * 24 / 1080);
+    /* 纸内文字的页边距。横向这一档同时决定纸比正文栏宽出多少（左右各一份）。 */
+    --about-sheet-pad-y: calc(var(--design-h) * 64 / 1080);
+    --about-sheet-pad-x: calc(var(--design-w) * 56 / 1920);
+}
+
+/* 主区不再铺白底、不再有投影：否则纸的左右两侧也一起变白，
+ * 「文本两面直接看到 0.4 衬底」就没了。 */
+.page_about .game-menu__main {
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    overflow: visible;   /* 纸的投影不被主区裁掉 */
+}
+/* 纸在自己内部滚动，所以这里只做居中（flex 列方向的 align/justify 正好对应横/纵） */
+.page_about .game-menu__body {
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    /* min-height: 0 是必须的：本页的 body 不再滚动（滚动移到纸内），它就不再是 scroll
+     * container，flex item 的 `min-height: auto` 于是退化成「内容的 min-content 高度」——
+     * 纸的内容会把 body 从 1016 一路顶高，纸又按被顶高后的高度重算尺寸……
+     * 写 0 才让纸的 `height: 100%` 拿到确定的 1016（踩过：只加 grid-template-rows 不够）。 */
+    min-height: 0;
+    padding: var(--about-sheet-gap);
+}
+
+.page_about .about-panel {
+    /* 纸宽 = 正文栏宽 + 左右页边距。全局 box-sizing 是 border-box，所以内容盒正好落在
+     * 900 这一档，正文的换行位置与原版逐字一致。
+     * 不用 aspect-ratio：A4 比例会把纸宽锁到 684、栏宽压到 572（见文件头说明）。 */
+    width: calc(var(--about-sheet-content) + var(--about-sheet-pad-x) * 2);
+    max-width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    background-color: var(--game-menu-panel, transparent);
+    padding: var(--about-sheet-pad-y) var(--about-sheet-pad-x);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
 .about-content {
@@ -17,7 +70,9 @@
     color: var(--color-text);
     line-height: 1.7;
     padding: 0;
-    max-width: 900px;
+    /* 正文栏宽：与原版同档（原为 `max-width: 900px`）。纸的宽度是照着它算的，
+     * 这里再限一次是为了让「栏宽」这件事只有一个来源可改。 */
+    max-width: var(--about-sheet-content);
 }
 .about-content h2 {
     color: var(--color-accent);
@@ -26,6 +81,57 @@
     font-weight: 400;
     margin: 0 0 calc(var(--design-h) * 6 / 1080) 0;
 }
-.about-content .ver { color: var(--color-accent); opacity: 0.7; margin: 0 0 calc(var(--design-h) * 24 / 1080) 0; }
-.about-content a { color: var(--color-hover); text-decoration: underline; }
+/* 版本行：游戏版本与引擎版本放在**同一个圆角框**里、排成一行。
+ * inline-flex 让框宽随内容收缩（不是拉满整行），胶囊半径给足即可。
+ * 字号用设计像素直写（20/1920）：原来这一行没有 font-size，会吃浏览器默认的 16px，
+ * 舞台整体缩放后就与旁边的正文（--size-interface）对不上。 */
+.about-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--design-w) * 14 / 1920);
+    margin: 0 0 calc(var(--design-h) * 26 / 1080) 0;
+    padding: calc(var(--design-h) * 7 / 1080) calc(var(--design-w) * 20 / 1920);
+    border: calc(var(--design-w) * 1 / 1920) solid var(--color-accent);
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.5);
+    font-size: calc(var(--design-w) * 20 / 1920);
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.about-meta__item { color: var(--color-accent); opacity: 0.85; }
+/* 分隔用一条细竖线而不是「·」：不受字体影响，与框高的比例可控 */
+.about-meta__sep {
+    width: calc(var(--design-w) * 1 / 1920);
+    height: calc(var(--design-h) * 18 / 1080);
+    background-color: var(--color-accent);
+    opacity: 0.35;
+    flex: none;
+}
+/* 引擎名 + 版本号整体是一个指向引擎仓库的链接。**不带下划线**，hover 用「变色 + 淡底」提示。
+ * 三个坑都别再踩：
+ *   ① 不要用 border-bottom 画下划线（行高会被推、hover 态还要单独清理）；
+ *   ② 不要以为本规则里写 text-decoration:none 就够 —— 它嵌在 .about-content 里，
+ *      原先正文链接规则写作 `.about-content a`（特异性 0,1,1）**高于**单个类的 (0,1,0)，
+ *      会把这里的 none 覆盖成 underline，即它是**死代码**。正文规则已收窄为 `.about-content p a`
+ *      （版本行不在 <p> 内，二者不再竞争）。
+ *   ③ 光靠变色也不够：**当主题把 --color-hover 与 --color-accent 设成同一个值**（单色主题，
+ *      本工程就是 #000000 = #000000）时 hover 毫无视觉变化 ——「规则在、眼睛看不见」。
+ *      所以再叠一层淡底，颜色由 --color-accent 经 color-mix 派生，不写死（rgba 那行是
+ *      color-mix 不支持时的兜底，同 settings.css 的做法）。 */
+.about-meta__link {
+    color: var(--color-hover);
+    text-decoration: none;
+    /* 恒定 padding + 等量负 margin：hover 前后几何完全不变（否则胶囊会随 hover 抖一下） */
+    padding: calc(var(--design-h) * 2 / 1080) calc(var(--design-w) * 10 / 1920);
+    margin: calc(var(--design-h) * -2 / 1080) calc(var(--design-w) * -10 / 1920);
+    border-radius: calc(var(--design-w) * 6 / 1920);
+    background-color: transparent;
+}
+.about-meta__link:hover {
+    color: var(--color-accent);
+    background-color: rgba(59, 89, 152, 0.12);
+    background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+/* 正文里作者自己写的链接才带下划线（正文按行渲染成 <p>） */
+.about-content p a { color: var(--color-hover); text-decoration: underline; }
 .about-content p { margin: 0 0 calc(var(--design-h) * 14 / 1080) 0; font-size: var(--size-interface); }

@@ -112,6 +112,13 @@
     /* 把当前播放模式（正常 / 自动 / 快进）上报给预加载器：窗口长度以「秒」计，
      * 模式决定「一句多少秒」，因此模式一变，待发集合与排序都要重算。 */
     function syncPlaybackMode() {
+        // 快进指示条是 state.skip 的纯视图。放在这里（而不是 setSkip 内部）的原因：
+        // setSkip / setAuto / stopPlayback 三条路径最后都汇到本函数，指示条只此一处同步，
+        // 不存在第二处真值源。注意必须在下面的 `if (!P) return` 之前——预加载器缺席时
+        // 指示条同样要能动。
+        if (global.AliceADVEngine && global.AliceADVEngine.setSkipIndicator) {
+            global.AliceADVEngine.setSkipIndicator(state.skip);
+        }
         const P = global.AliceADVPreload;
         if (!P) return;
         if (P.setPlaybackMode) P.setPlaybackMode(state.skip ? "skip" : (state.auto ? "auto" : "normal"));

@@ -22,15 +22,23 @@ import shutil
 import re
 import time
 
-from . import ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME, template_path
+from . import (ENGINE_MARKER, ENGINE_RUNTIME, ENGINE_VERSION, ENGINE_NAME,
+               ENGINE_REPO, template_path)
 from .cssutil import rewrite_css_asset_paths
 
 # 复制工程到 dist/web 时忽略的项（避免递归 / 引擎内部文件 / 用户的 dot 文件）。
 # documents/：作者自己的说明文档，属于写作资料而非游戏内容，不应随发行版发给玩家
 #（引擎官方文档在仓库 docs/，同样不随包也不随工程分发）。
+# *.bak*：改配置前的备份（theme.json.bak-20260927 之类）是作者本地的历史，不是游戏内容，
+#        不该跟着发行版发出去——里面往往还留着旧正文与旧样式。
 IGNORE_PATTERNS = ("dist", ".git", ".gitignore", ".workbuddy", ".DS_Store",
                    ".idea", ".vscode", ENGINE_MARKER, "__pycache__", "*.pyc",
-                   "documents")
+                   "*.bak", "*.bak-*", "documents")
+
+# 关于页正文放这里（工程根）。
+# 正文属于「内容」而非「样式」：theme.json 只描述外观与界面，长篇文本与剧本、素材
+# 一样各自占一个文件。构建时读取并内联为 window.__ABOUT__；模板模式由 theme.js fetch。
+ABOUT_FILE = "about.txt"
 
 
 def _safe_clear_directory(target):
@@ -163,6 +171,9 @@ def build_css_vars(theme):
     n = L.get("name", {})
     add("--name-left", rel(n.get("left")))
     add("--name-top",  rel(n.get("top")))
+    # 名字框锚点：Ren'Py gui.name_xalign 的等价物（0~1，0=左缘贴合）。
+    # 原样透传（数值，不是相对值），不做字面兜底——默认值在模板 theme.json 的 layout.name.anchor。
+    add("--name-anchor", n.get("anchor"))
     s = L.get("sprite", {})
     add("--sprite-bottom", rel(s.get("bottom")))
     add("--sprite-height", rel(s.get("height")))
@@ -419,6 +430,14 @@ def _read_json(path):
         return json.load(f)
 
 
+def _read_text(path):
+    """读取 UTF-8 文本；文件不存在返回 None（由调用方区分「没这个文件」和「空文件」）。"""
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def resolve_config(project_dir):
     """计算「生效配置」：引擎默认模板 deep merge 工程配置。
 
@@ -429,7 +448,11 @@ def resolve_config(project_dir):
     `aliceadv create` 复制进新工程的模板，因此是「默认值 + 工程模板」的单一来源，
     不存在第二份「推荐字段」清单。
 
-    返回 (theme, info)：均为合并后的完整配置，不再区分用户值 / 默认值；
+    关于页正文**不属于配置**：它来自工程根 about.txt（见 resolve_about），
+    不从 theme.json 读。若旧工程仍在 theme.json 里写着 about，这里会把它取出来
+    当兼容值并在构建时提示迁移（见 resolve_about）。
+
+    返回 (theme, info, about)：均为合并后的完整配置，不再区分用户值 / 默认值；
     运行时只读这份结果。info 另并入 theme.info（运行时读 theme.info）。
     """
     tpl = template_path()
@@ -444,7 +467,33 @@ def resolve_config(project_dir):
     )
     # info.json 仍是 theme.info 的来源：把完整 info 并入 theme.info
     theme["info"] = _deep_merge(theme.get("info", {}) or {}, info)
-    return theme, info
+    # 关于页正文不是配置：从生效配置里摘掉，改由 resolve_about 从 about.txt 取，
+    # 使其不出现在 window.__THEME__ / 产物的 theme.json 里。
+    legacy_about = theme.pop("about", None)
+    about = resolve_about(project_dir, legacy_about)
+    return theme, info, about
+
+
+def resolve_about(project_dir, legacy_about=None):
+    """关于页正文的来源解析：工程根 `about.txt`。
+
+    正文（游戏简介 / 制作人员 / 版权声明这类长篇文本）是**内容**，不是样式，
+    因此不写在 theme.json 里，而是和剧本、素材一样放工程根、一个文件放一类东西。
+    这里读到的文本由 build 内联为 `window.__ABOUT__`（构建产物 file:// 直接可读）；
+    模板模式（未构建、直接开模板目录）由 theme.js 运行时 fetch 同一个文件。
+
+    兼容：旧工程的 theme.json 若还写着 `about`，且工程根没有（或为空）about.txt，
+    则沿用该值并打印迁移提示——已迁移的工程不受影响，未迁移的工程也不会突然
+    变成空白页。about.txt 有内容时永远优先。
+    """
+    about = _read_text(os.path.join(project_dir, ABOUT_FILE))
+    if about and about.strip():
+        return about
+    if isinstance(legacy_about, str) and legacy_about.strip():
+        print("  ! theme.json 的 about 已废弃：关于页正文请改写到工程根 " + ABOUT_FILE +
+              "（本次仍沿用 theme.json 里的值）")
+        return legacy_about
+    return ""
 
 
 def build_project(project_dir):
@@ -468,7 +517,7 @@ def build_project(project_dir):
         print("✗ 工程目录缺少 theme.json: " + theme_path)
         return False
     try:
-        theme, info = resolve_config(project_dir)
+        theme, info, about = resolve_config(project_dir)
     except Exception as e:
         print("✗ 读取/合并配置失败:", e)
         return False
@@ -566,20 +615,27 @@ def build_project(project_dir):
         html, count=1
     )
 
-    # 7b. 把主题与剧本内联（在 theme.js 之前），使 file:// 直接可用
+    # 7b. 把主题、关于页正文与剧本内联（在 theme.js 之前），使 file:// 直接可用
     theme_inline = json.dumps(theme, ensure_ascii=False)
     scripts_inline = json.dumps(scripts, ensure_ascii=False)
+    # 关于页正文来自工程根 about.txt（不是 theme.json 的字段）。
+    # 把 「</」 转义成 「<\/」：正文是作者自由撰写的长文本，万一出现 </script> 会提前
+    # 结束脚本块；JS 里 "\/" 与 "/" 等价，读出来的字符串不受影响。
+    about_inline = json.dumps(about, ensure_ascii=False).replace("</", "<\\/")
     # 7c. 资源清单一并内联：运行时预加载调度需要知道每个资源的体积。
     #     路径用紧凑分隔符输出，几百项也只是一个几 KB 的脚本。
     assets_inline = json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
     # 打包引擎版本：来自 aliceadv 包（ENGINE_NAME/ENGINE_VERSION），
     # 而非工程 info.json，使构建产物在关于页/标题页展示「引擎版本」。
+    # repo 一并内联：关于页把引擎名做成指向仓库的链接，URL 的唯一来源是 __init__.py 的 ENGINE_REPO。
     engine_inline = json.dumps(
-        {"name": ENGINE_NAME, "version": ENGINE_VERSION}, ensure_ascii=False)
+        {"name": ENGINE_NAME, "version": ENGINE_VERSION, "repo": ENGINE_REPO},
+        ensure_ascii=False)
     html = html.replace(
         '<script src="style/theme.js"></script>',
         f'<script>window.__ENGINE__ = {engine_inline};</script>\n'
         f'    <script>window.__THEME__ = {theme_inline};</script>\n'
+        f'    <script>window.__ABOUT__ = {about_inline};</script>\n'
         f'    <script>window.__SCRIPTS__ = {scripts_inline};</script>\n'
         f'    <script>window.__ASSETS__ = {assets_inline};</script>\n'
         '    <script src="style/theme.js"></script>',
@@ -596,6 +652,9 @@ def build_project(project_dir):
     print(f"  主题: {theme.get('info', {}).get('name', '(未命名)')} "
           f"v{theme.get('info', {}).get('version', '?')}")
     print(f"  引擎: {ENGINE_NAME} {ENGINE_VERSION}")
+    print("  关于页: " + (f"{ABOUT_FILE} {len(about)} 字符"
+                          if about else
+                          f"无 {ABOUT_FILE}（关于页只显示游戏名与版本行）"))
     print(f"  剧本: {len(scripts)} 个文件已内联 ({', '.join(scripts.keys()) if scripts else '无'})")
     print(f"  资源清单: {len(assets)} 项 / {assets_bytes / 1048576:.1f} MB 被引用")
     print(f"  产物: {os.path.relpath(html_path, project_dir)}")

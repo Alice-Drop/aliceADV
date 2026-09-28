@@ -171,6 +171,11 @@
     position: absolute;
     left: var(--name-left, 3%);
     top: var(--name-top, -7%);
+    /* 名字框的锚点（Ren'Py gui.name_xalign 的等价物）：--name-anchor 是 0~1，
+     * 表示「框上的哪个点贴在 --name-left 上」——0 = 左缘贴合（默认，与旧行为一致）、
+     * 0.5 = 中点对齐、1 = 右缘对齐。名字框宽度随文字收缩，所以这里用 transform
+     * 平移（锚点语义），而不是 text-align（那只在框比文字宽时才看得出差别）。 */
+    transform: translateX(calc(var(--name-anchor, 0) * -100%));
     padding: calc(var(--design-h) * 8 / 1080) calc(var(--design-w) * 22 / 1920);
     font-family: var(--font-interface);
     color: var(--color-text);
@@ -283,20 +288,75 @@
 .toolbar__btn.is-active { color: #8ec5ff; }
 .toolbar__sep { display: none; }
 
-/* 跳过 / 通知提示 */
+/* ---------- 通知条 / 快进指示条 ----------
+ * 对应 Ren'Py 的 notify（gui.notify_ypos）与 skip_indicator（gui.skip_ypos）：
+ * 两条都水平铺满舞台，纵向位置由 theme.json 的 notifyYpos / skipYpos 决定
+ * （theme.js 写入 --notify-ypos / --skip-ypos）；靠内的 flex 对齐决定内容落点，
+ * 通知条居中、快进指示条靠左（与 Ren'Py 默认一致）。
+ *
+ * 元素由 theme.js 的 buildStagePage() 随舞台骨架建好，这里只管外观；
+ * 显隐一律看 .is-active —— 默认 display:none，所以没有消息时整条不占位、不可见。
+ * 衬底复用 --gui-frame（与菜单页 / 浮层同一张界面图，整体拉伸显示；
+ * 九宫格切片尚未接上，见 docs/样式控制.md §2.20）。 */
 .notify {
     position: absolute;
     left: 0; right: 0; top: calc(var(--design-h) * var(--notify-ypos, 68) / 1080);
-    display: flex;
+    display: none;
     justify-content: center;
     z-index: 8;
     pointer-events: none;
 }
+.notify.is-active { display: flex; }
 .notify__inner {
-    padding: calc(var(--design-h) * 6 / 1080) calc(var(--design-w) * 18 / 1920);
+    padding: calc(var(--design-h) * 8 / 1080) calc(var(--design-w) * 32 / 1920);
     font-family: var(--font-interface);
     color: var(--color-interface);
     font-size: var(--size-notify);
     min-width: calc(var(--design-w) * 240 / 1920);
     text-align: center;
+    background-color: transparent;
+    background-image: var(--gui-frame);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.skip-indicator {
+    position: absolute;
+    left: 0; right: 0; top: calc(var(--design-h) * var(--skip-ypos, 15) / 1080);
+    display: none;
+    justify-content: flex-start;
+    padding-left: calc(var(--design-w) * 40 / 1920);
+    z-index: 8;
+    pointer-events: none;
+}
+.skip-indicator.is-active { display: flex; }
+.skip-indicator__inner {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--design-w) * 9 / 1920);
+    padding: calc(var(--design-h) * 8 / 1080) calc(var(--design-w) * 32 / 1920);
+    font-family: var(--font-interface);
+    color: var(--color-interface);
+    font-size: var(--size-notify);
+    background-color: transparent;
+    background-image: var(--gui-frame);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+/* 三个三角依次亮起：对应 Ren'Py skip_indicator 里三个 at delayed_blink(0/0.2/0.4) 的「▸」。
+ * 序号是 .skip-indicator__inner 的子元素序号（1 = 文案，2/3/4 = 三个三角）。 */
+.skip-indicator__arrow {
+    color: var(--color-accent);
+    animation: skip-blink 0.9s ease-in-out infinite;
+}
+.skip-indicator__arrow:nth-child(2) { animation-delay: 0.15s; }
+.skip-indicator__arrow:nth-child(3) { animation-delay: 0.30s; }
+@keyframes skip-blink {
+    0%, 100% { opacity: 0.25; }
+    45%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skip-indicator__arrow { animation: none; opacity: 1; }
 }

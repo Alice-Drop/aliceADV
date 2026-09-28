@@ -35,7 +35,10 @@
         auto:     "自动",
         qsave:    "快存",
         qload:    "快读",
-        menu:     "菜单"
+        menu:     "菜单",
+        // 非导航键：快进指示条的文案（对应 Ren'Py skip_indicator 的 _("Skipping")）。
+        // 放在这里是为了让界面文案只有一处来源，与上面 NAV / TOOLBAR_LABELS 的约定一致。
+        skipIndicator: "快进中"
     };
 
     /* 按钮 → 导航目标（仅描述「点了这个键去哪」，不含顺序/文案/游戏内容）。
@@ -84,7 +87,30 @@
      * 模板/未构建模式下 window.__ENGINE__ 不存在，ENGINE_LABEL 为空（不展示引擎版本）。 */
     const ENGINE = (global.__ENGINE__ && typeof global.__ENGINE__ === "object") ? global.__ENGINE__ : {};
     const ENGINE_LABEL = (ENGINE.name ? ENGINE.name + " " : "") + (ENGINE.version || "");
+    /* 引擎仓库地址：由 builder 随 __ENGINE__ 一起内联（唯一来源是 aliceadv/__init__.py 的
+     * ENGINE_REPO）。这里的兜底字面量只服务一种场景——**直接打开模板目录**（未构建）时
+     * window.__ENGINE__ 整体不存在，ENGINE_LABEL 也为空、引擎版本行不显示，
+     * 兜底只是保证链接在任何情况下都不会变成空 href。 */
+    const ENGINE_REPO = ENGINE.repo || "https://github.com/Alice-Drop/aliceADV";
+
+    /* 版本号的显示文本：统一加 "v" 前缀。
+     * 标题页与关于页共用这一处（此前标题页写 `"v" + info.version`、关于页写 `info.version`
+     * 两个版本号一个带 v 一个不带，用户报的「游戏版本那里少了一个 v」就是它）。
+     * 配置里已经写成 "v0.2.2" 的不再加一个 v。 */
+    function verLabel(v) {
+        const s = (v === undefined || v === null) ? "" : String(v).trim();
+        if (!s) return "";
+        return /^v/i.test(s) ? s : "v" + s;
+    }
+
     let lastTheme = null; // buildAll 时缓存，供 renderSlots 重新渲染存档/读档页
+
+    /* 关于页正文。**不是 theme.json 的字段**——正文属于游戏内容，唯一位置是工程根
+     *  about.txt，两个入口读同一个文件：
+     *    - 构建产物：builder 读 about.txt 内联为 window.__ABOUT__（file:// 也能用）；
+     *    - 模板模式：loadTheme() 运行时 fetch about.txt（需本地服务器）。
+     *  二者只写这一个变量，fillAbout 只读它，值不会来自第二处。 */
+    let ABOUT_TEXT = "";
 
     /* 游戏内暂停菜单（浮层）。参考定义.md：菜单即暂停，同 ESC 效果，可回首页等。
      * 按钮列表、停靠方向、窗口尺寸由 theme.json 的 panel 控制（见 buildStagePage / build_panel_css）。
@@ -245,6 +271,9 @@
         const n = L.name || {};
         setVar("--name-left", rel(n.left));
         setVar("--name-top",  rel(n.top));
+        // 名字框锚点（0~1），与 builder.build_css_vars 同名同源，两边都写才不会
+        // 出现「构建产物生效、模板模式失效」——数值原样透传，不给兜底。
+        if (n.anchor != null) setVar("--name-anchor", n.anchor);
         // 立绘与 NVL：与 builder.build_css_vars 保持同名同源（此前只有 builder 写，
         // 模板模式（运行时 fetch theme.json）下 layout.sprite / layout.nvl 会被完全忽略）
         const sp = L.sprite || {};
@@ -322,7 +351,7 @@
         if (cfg.showName !== false && info.name) {
             const meta = el("div", { class: "title-meta" }, [ el("h1", { text: info.name }) ]);
         if (cfg.showVersion !== false && info.version) {
-            meta.appendChild(el("div", { class: "version", text: "v" + info.version }));
+            meta.appendChild(el("div", { class: "version", text: verLabel(info.version) }));
         }
         if (cfg.showVersion !== false && ENGINE_LABEL) {
             meta.appendChild(el("div", { class: "version engine", text: ENGINE_LABEL }));
@@ -420,13 +449,17 @@
 
         const pageKey = pageId.replace("page_", "");
         const cfg = (theme.pages && theme.pages[pageKey]) || {};
-        // 菜单页共享外观：整页衬底 + 主内容底板。默认值唯一来源 = 模板 theme.json 的 gameMenu
-        // （构建时 _deep_merge(模板, 工程) 合并，工程没写就用模板的）；单页可用
-        // pages.<页>.backgroundColor / panelColor 覆盖，显式 null 表示不要该层。
+        // 菜单页共享外观：整页衬底 + 主内容面板底色 + 侧栏按钮底色。默认值唯一来源 = 模板
+        // theme.json 的 gameMenu（构建时 _deep_merge(模板, 工程) 合并，工程没写就用模板的）；
+        // 单页可用 pages.<页>.backgroundColor / panelColor / sidebarButtonColor 覆盖，
+        // 显式 null 表示不要该层。
+        // panelColor 只服务主内容那一整块面板；侧栏本身透明、按钮底色走 sidebarButtonColor
+        // （见 game-menu.css）。
         const shared = theme.gameMenu || {};
         const pickCfg = k => (cfg[k] !== undefined ? cfg[k] : shared[k]);
         const tintColor  = pickCfg("backgroundColor");
         const panelColor = pickCfg("panelColor");
+        const sideBtnColor = pickCfg("sidebarButtonColor");
 
         if (cfg.background) {
             root.appendChild(el("div", {
@@ -445,8 +478,13 @@
                 style: `background:${tintColor};`
             }));
         }
-        // ② 主内容底板：写成 CSS 变量，由 game-menu.css 用到 .game-menu__main 上（不透明白衬底）。
+        // ② 面板底色：写成 CSS 变量，由 game-menu.css 用到 .game-menu__main（唯一消费者）。
+        //    侧栏本身不用它 —— 侧栏透明。
         root.style.setProperty("--game-menu-panel", panelColor || "transparent");
+        // ③ 侧栏按钮底色：写成 CSS 变量，由 .game-menu__sidebar .paper-btn 消费。
+        //    默认「纯白、完全不透明」（模板 theme.json 的 gameMenu.sidebarButtonColor）；
+        //    写 null 则按钮也透明（范围只剩 colors.muted 描边）。
+        root.style.setProperty("--game-menu-sidebar-btn", sideBtnColor || "transparent");
 
         const menu = el("div", { class: "game-menu" });
 
@@ -783,29 +821,53 @@
     }
 
     /* ---------- 3.5 关于页 ----------
-     * 两层衬底，保证背景图不影响可读性：
-     *   ① 整页衬底（.page__tint，由 buildGameMenuPage 铺）；
-     *   ② 正文下底板（.about-panel），文字始终落在纯色上。
-     * 两层颜色都来自 theme.json 的 pages.about.backgroundColor / panelColor（默认值写在模板 theme.json，
-     * 构建时合并），支持 rgba()；未配置则不加内联样式，让 CSS 的兜底生效。 */
+     * 衬底分两层，通用机制铺整页那一层（见 buildGameMenuPage：.page__tint 用
+     * gameMenu.backgroundColor）；**白纸那一层由本页自己承担**（.about-panel，
+     * 见 about.css）：关于页的正文排成**定宽的一栏**，白底（纸）只包住这一栏并水平居中，
+     * 纸的左右两侧直接透出整页衬底，所以主内容区 .game-menu__main 在本页被去掉背景/投影/内边距。
+     * 正文来自工程根 about.txt（见 ABOUT_TEXT 的说明），空行分段。
+     *
+     * 版本行：两个版本号合成**一行**、放一个圆角框里（.about-meta，样式在 about.css）。
+     * 「引擎名 + 版本号」**整体是一个链接**（指向引擎仓库，URL 来自 __ENGINE__.repo，唯一来源
+     * __init__.py 的 ENGINE_REPO），链接不带下划线、只靠 hover 变色。
+     * 原先另起两段的「由 aliceADV 引擎驱动 (MIT License)」与「引擎仓库: …」已按要求移除
+     * —— 仓库地址改为由这一处链接承担，不再重复出现。 */
     function fillAbout(body, theme, cfg) {
         const info = theme.info || {};
-        const aboutText = (theme.about || "").trim();
-        // 白色底板由 .game-menu__main 统一承担（--game-menu-panel，见 buildGameMenuPage）；
-        // 这里只做限宽容器，不再自带背景/阴影（否则会变成「白底上的白卡片」）。
+        const aboutText = (ABOUT_TEXT || "").trim();
+        // 白纸由 .about-panel 承担（about.css：纸宽包住正文栏 + 居中 + 纸内滚动，底色 --game-menu-panel）；
+        // 这里只搭「纸 + 正文」这层结构，不写内联样式。
         const panel = el("div", { class: "about-panel" });
         const c = el("div", { class: "about-content" });
         c.appendChild(el("h2", { text: info.name || "游戏名" }));
-        if (info.version) c.appendChild(el("div", { class: "ver", text: "游戏版本 " + info.version }));
-        if (ENGINE_LABEL) c.appendChild(el("div", { class: "ver", text: "引擎版本 " + ENGINE_LABEL }));
-        c.appendChild(el("p", { text: "由 aliceADV 引擎驱动 (MIT License)" }));
-        c.appendChild(el("p", { html: "引擎仓库: <a href='#'>github.com/aliceadv/engine</a>" }));
+
+        // 版本行：同框同行，中间一条细竖线分隔
+        const meta = el("div", { class: "about-meta" });
+        if (info.version) {
+            meta.appendChild(el("span", { class: "about-meta__item",
+                                         text: "游戏版本 " + verLabel(info.version) }));
+        }
+        if (ENGINE_LABEL) {
+            if (info.version) meta.appendChild(el("span", { class: "about-meta__sep" }));
+            const eng = el("span", { class: "about-meta__item" }, "引擎 ");
+            // 链接圈住「引擎名 + 版本号」**整体**。文案直接用 ENGINE_LABEL（它本来就是这两截拼好的），
+            // 不要在这里再拼一次——两处拼接迟早会不一致。
+            eng.appendChild(el("a", {
+                class: "about-meta__link",
+                href: ENGINE_REPO,
+                target: "_blank",
+                rel: "noopener noreferrer",
+                text: ENGINE_LABEL
+            }));
+            meta.appendChild(eng);
+        }
+        if (meta.childNodes.length) c.appendChild(meta);
+
+        // 没有 about.txt（或内容为空）就不出正文段落：游戏名与版本行是引擎自带的，与作者正文是两回事
         if (aboutText) {
             aboutText.split(/\n+/).forEach(line => {
                 if (line.trim()) c.appendChild(el("p", { text: line }));
             });
-        } else {
-            c.appendChild(el("p", { text: "本程序使用了由若干许可证授权的免费软件。" }));
         }
         panel.appendChild(c);
         body.appendChild(panel);
@@ -872,6 +934,23 @@
 
         // 选项（剧本 decide 判定指令渲染到这里）
         root.appendChild(el("div", { class: "choices" }));
+
+        // 通知条 / 快进指示条（对应 Ren'Py 的 notify 与 skip_indicator）。
+        // 位置由 theme.json 的 notifyYpos / skipYpos 决定，外观在 stage.css。
+        // 骨架只在这里建一次：运行时（engine.js 的 notify / script.js 的 syncPlaybackMode）
+        // 仅切换 .is-active 与文字 —— 舞台重建（换主题 / 重新 buildAll）后元素仍在，不会丢。
+        root.appendChild(el("div", { class: "notify" }, [
+            el("div", { class: "notify__inner" })
+        ]));
+
+        const skipInner = el("div", { class: "skip-indicator__inner" }, [
+            el("span", { class: "skip-indicator__label", text: I18N.skipIndicator })
+        ]);
+        // 三个三角依次闪烁（阶段号与 CSS 的 nth-child 对齐：1=文案，2/3/4=三角）
+        for (let i = 0; i < 3; i++) {
+            skipInner.appendChild(el("span", { class: "skip-indicator__arrow", text: "▸" }));
+        }
+        root.appendChild(el("div", { class: "skip-indicator" }, [skipInner]));
 
         // 工具栏（顺序来自 theme.json 的 stage.toolbar）
         const tb = el("div", { class: "toolbar" });
@@ -997,8 +1076,12 @@
     function getCatalog() { return CATALOG; }
 
     async function loadTheme() {
-        // 构建产物会把主题内联为 window.__THEME__（无需 fetch，file:// 直接可用）
-        if (global.__THEME__) return global.__THEME__;
+        // 构建产物会把主题内联为 window.__THEME__（无需 fetch，file:// 直接可用）；
+        // 关于页正文同理内联为 window.__ABOUT__（见 builder.py 的 resolve_about）。
+        if (global.__THEME__) {
+            ABOUT_TEXT = (typeof global.__ABOUT__ === "string") ? global.__ABOUT__ : "";
+            return global.__THEME__;
+        }
 
         // 模板模式：运行时 fetch theme.json（需本地服务器）
         try {
@@ -1011,8 +1094,15 @@
                 } catch (_) {}
                 try {
                     const r3 = await fetch("about.txt?t=" + Date.now());
-                    if (r3.ok) loaded.about = await r3.text();
+                    // 空文件不算「有正文」：不能让它把兼容值清成空串，
+                    // 否则关于页的正文会随「文件在不在」而非「内容写没写」时有时无。
+                    if (r3.ok) {
+                        const t = await r3.text();
+                        if (t.trim()) ABOUT_TEXT = t;
+                    }
                 } catch (_) {}
+                // 兼容：旧工程把正文写在 theme.json 的 about 里（已废弃，构建时会提示迁移）
+                if (!ABOUT_TEXT && typeof loaded.about === "string") ABOUT_TEXT = loaded.about;
                 return loaded;
             }
         } catch (e) {
