@@ -1,6 +1,9 @@
 /* =========================================================
  * page_about — 关于
- * 游戏名 / 版本 / 引擎信息 / 正文（来自工程根 about.txt，空行分段）。
+ * 游戏名 / 版本 / 引擎信息 / 正文（来自工程根 about.txt）。
+ * 正文换行语义（theme.js fillAbout）：按 \n 切成一行一个块，非空行 = 一行文字，空行 = 高度等于
+ * 一行文字的块（.about-blank，min-height = 字号 × 1.7 = line-height）—— 空一行 = 一行文字高度、
+ * 空两行 = 两行高度，逐行还原作者排版。
  *
  * 版式（2026-09-28 定稿）：正文按**固定栏宽**排成一列，白底（纸）**只包住这一列**、
  * 不铺满主区，整块纸在侧栏右侧的区域里**水平居中**；纸的左右两侧不放任何面板，
@@ -112,8 +115,8 @@
  *   ① 不要用 border-bottom 画下划线（行高会被推、hover 态还要单独清理）；
  *   ② 不要以为本规则里写 text-decoration:none 就够 —— 它嵌在 .about-content 里，
  *      原先正文链接规则写作 `.about-content a`（特异性 0,1,1）**高于**单个类的 (0,1,0)，
- *      会把这里的 none 覆盖成 underline，即它是**死代码**。正文规则已收窄为 `.about-content p a`
- *      （版本行不在 <p> 内，二者不再竞争）。
+ *      会把这里的 none 覆盖成 underline，即它是**死代码**。正文规则已收窄到 .about-body 之内
+ *      （`.about-content .about-body a`，版本行不在 .about-body 内，二者不再竞争）。
  *   ③ 光靠变色也不够：**当主题把 --color-hover 与 --color-accent 设成同一个值**（单色主题，
  *      本工程就是 #000000 = #000000）时 hover 毫无视觉变化 ——「规则在、眼睛看不见」。
  *      所以再叠一层淡底，颜色由 --color-accent 经 color-mix 派生，不写死（rgba 那行是
@@ -132,6 +135,20 @@
     background-color: rgba(59, 89, 152, 0.12);
     background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
-/* 正文里作者自己写的链接才带下划线（正文按行渲染成 <p>） */
-.about-content p a { color: var(--color-hover); text-decoration: underline; }
-.about-content p { margin: 0 0 calc(var(--design-h) * 14 / 1080) 0; font-size: var(--size-interface); }
+/* 正文逐行渲染：一行一个块，空行是一个高度 = 一行文字的块。
+ * 非空行（.about-line）本身就有 line-height 高度，长行按栏宽折行（折几行就多高）；
+ * 空行（.about-blank）没有内容、行盒会塌缩，所以显式给 min-height = 一行文字高度
+ * （line-height = 字号 × 1.7），让「空一行 = 一行文字高度、空两行 = 两行高度」逐行还原。 */
+.about-content .about-body {
+    margin: 0;
+    font-size: var(--size-interface);
+}
+.about-content .about-body .about-line {
+    white-space: pre-wrap;   /* 保留行内前导/连续空格；长行仍按栏宽折行 */
+    overflow-wrap: break-word;
+}
+.about-content .about-body .about-blank {
+    min-height: calc(var(--size-interface) * 1.7);   /* = 一行文字高度 */
+}
+/* 正文里作者自己写的链接才带下划线（若将来把 URL 包成 <a>） */
+.about-content .about-body a { color: var(--color-hover); text-decoration: underline; }

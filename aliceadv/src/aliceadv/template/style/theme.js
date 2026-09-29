@@ -863,11 +863,23 @@
         }
         if (meta.childNodes.length) c.appendChild(meta);
 
-        // 没有 about.txt（或内容为空）就不出正文段落：游戏名与版本行是引擎自带的，与作者正文是两回事
+        // 没有 about.txt（或内容为空）就不出正文：游戏名与版本行是引擎自带的，与作者正文是两回事。
+        //
+        // 空行按「真实行高」逐行还原（2026-09-29 第三次修正）：
+        //   第一版 split(/\n+/) 一刀切、空一行/空两行无法区分；第二版 pre-wrap，但空行没有内容、
+        //   行盒高度塌缩到接近 0，空行仍没占住一行文字高度（用户报「空行也要真实还原文字的高度」）。
+        //   终版：按 \n 切成一行一个块 —— 非空行 = 一行文字（长行仍按栏宽折行，折几行就多高）；
+        //   空行 = .about-blank，高度显式等于一行文字高度（line-height）。于是「空一行 = 一行文字高度、
+        //   空两行 = 两行高度」逐行还原，且这个高度就是正文真正的一行高度，不是数值硬凑的段距。
+        //   用 textContent 写入：正文是作者自由文本，不会被当 HTML 解析。
         if (aboutText) {
-            aboutText.split(/\n+/).forEach(line => {
-                if (line.trim()) c.appendChild(el("p", { text: line }));
+            const body = el("div", { class: "about-body" });
+            aboutText.split("\n").forEach(line => {
+                const d = el("div", { class: "about-line" + (line.trim() ? "" : " about-blank") });
+                d.textContent = line;
+                body.appendChild(d);
             });
+            c.appendChild(body);
         }
         panel.appendChild(c);
         body.appendChild(panel);

@@ -424,8 +424,9 @@ def test_about_text_single_source():
     #   ② 正文链接规则必须收窄到 `p`：写成 `.about-content a`（特异性 0,1,1）会比
     #      单个类的 `.about-meta__link`（0,1,0）**更具体**，从而把 main:none 覆盖成 underline ——
     #      那样 `.about-meta__link` 里的 `text-decoration: none` 就成了死代码，改样式时看不出问题。
-    check(".about-content p a" in css_code,
-          "正文链接规则收窄为 `.about-content p a`（不与版本行链接争特异性）")
+    check(".about-content .about-body a" in css_code,
+          "正文链接规则收窄到 .about-body 之内（`.about-content p a` 的 v3 等价写法："
+          "正文是 div.about-line 而非 <p>，版本行不在 .about-body 内，二者不争特异性）")
     check(".about-content a" not in css_code,
           "旧的 `.about-content a` 已移除（它会把版本行链接强制加上下划线）")
     link_rule = css_code.split(".about-meta__link")[1].split("}")[0]
@@ -438,6 +439,23 @@ def test_about_text_single_source():
     check("color-mix" in hover_rule and "var(--color-accent)" in hover_rule,
           "hover 淡底由 --color-accent 经 color-mix 派生（主题驱动，不写死颜色）")
     check("rgba(" in hover_rule, "hover 淡底带 rgba 兜底（不支持 color-mix 时仍在）")
+
+    # ---- 关于页正文空行逐行还原（2026-09-29，第三版修正）----
+    # 第一版 split(/\n+/) 一刀切、空一行/空两行无法区分；第二版 pre-wrap，但空行没有内容、
+    # 行盒塌缩成接近 0，空行仍没占住一行文字高度；终版：按 \n 切成一行一个块，非空行 = 一行文字，
+    # 空行 = .about-blank 且 min-height 显式 = 一行文字高度（字号 × 1.7 = line-height）。
+    check("split(/\\n+/).forEach" not in js_code,
+          "theme.js 不再把整段正文按「连续换行」一刀切（空行数量信息被丢弃）")
+    check("about-blank" in js_code and "textContent" in js_code,
+          "theme.js 用 .about-blank 标记空行 + textContent 写入（空行 = 一行文字高度，且不当 HTML 解析）")
+    blank_rule = css_code.split(".about-content .about-body .about-blank")[1].split("}")[0] \
+        if ".about-content .about-body .about-blank" in css_code else ""
+    check(bool(blank_rule) and "min-height" in blank_rule and "1.7" in blank_rule,
+          "about.css 给空行 min-height = 一行文字高度（字号 × 1.7 = line-height）")
+    check(".about-content p.is-section" not in css_code,
+          "旧的 .is-section 段距写法已移除（段距不再用数值硬凑）")
+    check(".about-content p " not in css_code and ".about-content p{" not in css_code,
+          "正文不再拆成多个 <p>（一行一个块整体渲染）")
 
     # ---- 版本号都带 `v` 前缀（2026-09-27 修：关于页的「游戏版本」少了一个 v）----
     # 标题页原先写 `"v" + info.version`、关于页写 `info.version` —— 同一条信息两处各拼一次，
