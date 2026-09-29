@@ -13,13 +13,25 @@
         "page_stage", "page_gallery", "page_about"
     ];
 
+    /* 菜单页组：保存 / 读取 / 设置 / 章节 / 分支 / 画廊 / 关于。
+     * 这些页共享同一套侧边栏，内部标签切换**不构成「导航历史」**——
+     * 菜单内的「返回」应当一次性关闭整个菜单、回到进入菜单前的那一页（首页或舞台），
+     * 而不是在标签页之间挨个回退（那是之前的 bug）。标题页与舞台不属于菜单组。 */
+    const MENU_PAGES = [
+        "page_save", "page_load", "page_settings",
+        "page_chapters", "page_branches", "page_gallery", "page_about"
+    ];
+
     /* 设计分辨率**不在这里写死**：它来自 theme.json 的 screen.designWidth / designHeight，
      * 由 theme.js 写入 CSS 变量 --design-w / --design-h，并作用在 #stage 的 width/height 上。
      * fitStage() 直接量 #stage 的布局尺寸即可，这样设计分辨率只有一份来源。 */
 
     const state = {
         currentPage: "page_title",
-        history: []
+        history: [],
+        // 进入菜单组前的那一页（首页或舞台）。从菜单组**外**跳进某个菜单页时记下，
+        // 离开菜单组时清空；组内部标签切换不改它。供「返回」键一次性关闭整个菜单。
+        menuOrigin: null
     };
 
     /* ---------- 游戏内浮层（菜单 / 历史） ---------- */
@@ -54,6 +66,13 @@
         });
         state.currentPage = id;
 
+        // 记录菜单组入口：从菜单组**外**进入某菜单页时记下入口页（首页 / 舞台），
+        // 离开菜单组时清空；组内部标签页切换不改它。供「返回」一次性关闭整个菜单。
+        const prevWasMenu = MENU_PAGES.includes(prev);
+        const idIsMenu = MENU_PAGES.includes(id);
+        if (idIsMenu && !prevWasMenu) state.menuOrigin = prev;
+        else if (!idIsMenu && prevWasMenu) state.menuOrigin = null;
+
         // 运行时预加载：切换页面后台预载目标页背景（info.json preload.runtime 含 "page" 时生效，不阻塞切换）
         if (global.AliceADVPreload && global.AliceADVTheme) {
             global.AliceADVPreload.hookPage(id, global.AliceADVTheme.getTheme(), global.AliceADVTheme.getCatalog());
@@ -79,6 +98,21 @@
     }
 
     function goBack() {
+        // 菜单页内的「返回」= 关闭整个菜单，回到进入菜单前的那一页（首页或舞台），
+        // 而不是在标签页之间挨个后退。
+        // 做法：从 history 末尾往前跳过所有菜单页，落到第一个非菜单页；若 history 里已无
+        // （极少，菜单被当作初始页打开），回退到记录的入口或首页。这样无论组内访问过多少
+        // 个标签，一次返回都直接出菜单。
+        if (MENU_PAGES.includes(state.currentPage)) {
+            let entry = null;
+            while (state.history.length) {
+                const top = state.history.pop();
+                if (!MENU_PAGES.includes(top)) { entry = top; break; }
+            }
+            state.menuOrigin = null;
+            showPage(entry || state.menuOrigin || "page_title", { noPush: true });
+            return;
+        }
         if (state.history.length) {
             showPage(state.history.pop(), { noPush: true });
         }
@@ -178,7 +212,8 @@
             return;
         }
         if (target.dataset.action === "back") {
-            // 侧边栏「返回」：关闭当前界面、回到上一步（goBack 弹出 history 栈），不是回首页
+            // 侧边栏「返回」：在菜单页内 = 一次性关闭整个菜单，回到进入菜单前的那一页
+            // （首页或舞台）；非菜单页时退回上一页（goBack 已按当前页区分）。
             goBack();
             return;
         }
@@ -342,6 +377,7 @@
                 return;
             }
             if (state.history.length) goBack();
+            // 注：在菜单页内按 ESC 同样触发 goBack —— 已是「一次性关闭整个菜单」语义，与侧边栏返回一致。
         });
 
         // 舞台等比缩放：初始化 + 窗口变化时重新计算

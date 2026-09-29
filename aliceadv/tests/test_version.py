@@ -133,6 +133,9 @@ SCAN_EXTS = {".py", ".toml", ".cfg", ".json", ".js", ".html", ".md", ".txt",
              ".in", ".yml", ".yaml", ".css"}
 SKIP_DIRS = {".git", ".github", ".workbuddy", "__pycache__", "node_modules",
              "build", "dist", "废弃", "assets", "asserts", "fonts"}
+# 变更日志本质上就是「按版本号记录历史」的文档，里面出现当前版本号是预期行为，
+# 不属于「代码/配置又写死一份导致双源漂移」的退化，故按文件名豁免。
+SKIP_FILES = {"CHANGELOG.md"}
 
 
 def _version_lines():
@@ -152,6 +155,8 @@ def _version_lines():
                 continue
             path = os.path.join(root, name)
             if os.path.abspath(path) == os.path.abspath(VERSION_FILE):
+                continue
+            if name in SKIP_FILES:
                 continue
             try:
                 lines = read(path).splitlines()
