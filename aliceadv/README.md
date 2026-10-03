@@ -1,14 +1,35 @@
 # AliceADV
 
-aliceADV is a web-based ADV (visual novel) game engine that follows the design
-language of Ren'Py. Scenes, dialogue, characters, and branching are described in
-JSON, and the engine compiles them into a static web game that runs in any browser
-with no server or runtime dependency — you can open `index.html` directly over
-`file://` or host it as a static site.
+aliceADV is a web-based ADV (visual novel) game engine that makes it easy to build
+high-performance visual novel games.
+
+**Developer-friendly.** Scripts are a flat JSON instruction stream (segments of
+instructions) and the interface is described by a single `theme.json`, so a complete
+game needs no Python or CSS. That is a convenience, not a limitation: the title, save,
+load, settings, chapters, branches, gallery, and about pages are all there, and
+transitions, NVL, autosave, skip, and key mapping are fully implemented.
+
+**Easy to publish.** A build produces plain static web files that can be deployed
+anywhere — native installers for each platform are on the way — so putting them on a
+free static host such as GitHub Pages is enough to let others play it online. The web
+build also ships with a preloading system that keeps the experience as good as it can
+be on a slow or unreliable network.
+
+**Partially compatible with Ren'Py.** Asset directories (`gui/`, `images/bg/`,
+`images/char/<id>/`, `audio/`, including the `button/` and `overlay/` subdirectories),
+sprite positions, and common presentation semantics are compatible with Ren'Py
+projects, so existing assets can be carried over as they are; `aliceadv rpy2adv`
+converts `.rpy` scripts and `aliceadv gui2theme` converts `gui.rpy` layout into this
+engine's script and configuration.
+
+**Friendly to AI-assisted development.** Have an idea for the galgame or otome text
+game you never had the skills to build? This package ships the documentation and the
+helper scripts, so you can hand it to an AI agent and let it learn the engine — you
+describe the game you want, and it turns that into something you can actually run.
 
 The engine ships as a Python package providing a `create` / `build` command-line
-tool, plus the engine template (HTML/CSS/JS) that is assembled into each project
-at build time.
+tool, plus the engine template (HTML/CSS/JS) that is assembled into each project at
+build time. A graphical development tool is on the way.
 
 > 中文说明见仓库根目录 `README_zh-CN.md`。
 
@@ -17,17 +38,11 @@ at build time.
 Requires Python >= 3.6 (see `requires-python` in `pyproject.toml`).
 
 ```bash
-pip install aliceadv          # from PyPI
-# or, from a local checkout of this package directory:
-pip install ./aliceadv
+pip install aliceadv
 ```
 
-Verify:
-
-```bash
-aliceadv --version
-# aliceADV 0.1.0 (engine v0.1)
-```
+Prebuilt wheels are attached to the GitHub releases; you can download one and install
+it directly.
 
 ## Quick start
 

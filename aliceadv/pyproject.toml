@@ -7,11 +7,11 @@ name = "aliceadv"
 # 版本不写在这里：唯一来源是 src/aliceadv/_version.py 的 __version__，
 # 由下面的 [tool.setuptools.dynamic] 读取。改版本只需编辑那一行。
 dynamic = ["version"]
-description = "aliceADV — a Ren'Py-style web ADV (visual novel) game engine: project template + create/build compiler"
+description = "aliceADV — a web ADV (visual novel) game engine: author games entirely in JSON, build static pages that deploy anywhere, friendly to AI-assisted development, partial Ren'Py compatibility"
 readme = "README.md"
 requires-python = ">=3.6"
 license = { file = "LICENSE" }
-keywords = ["adv", "visual-novel", "renpy", "game-engine", "web", "visual-novel-engine"]
+keywords = ["adv", "visual-novel", "renpy-compatible", "game-engine", "web", "html5", "static-site", "visual-novel-engine", "ai-assisted-development", "llm"]
 authors = [
     { name = "AliceDrop" },
 ]

@@ -2,9 +2,14 @@
 
 | [English](./README.md) | 简体中文 |
 
-AliceADV 是一款基于网页的 ADV（视觉小说）游戏引擎。它沿用 Ren'Py 的设计语言：用 JSON 描述场景、对话、角色与分支，引擎产出可直接在浏览器运行的静态网页游戏。
+AliceADV 是一款网页端 ADV（视觉小说）游戏引擎，让用户轻松创建高性能的视觉小说游戏。
 
-引擎以 Python 包形式发布，提供 `create` / `build` 命令行工具。构建产物是纯 HTML/CSS/JS，无服务器、无运行时依赖——可通过 `file://` 直接打开 `index.html`，也可作为静态站点部署。
+AliceADV 强调 **开发者友好。** 剧本是扁平的 JSON 指令流（段 + 指令），界面由一份 `theme.json` 描述，做一款完整游戏不需要写 Python 或 CSS；这并不意味着束缚，标题、存档、设置、章节、分支、画廊、关于等页面，以及转场、NVL、自动存档、快进、按键映射等功能均有完整实现。
+**轻松发布游戏**。编译后直接产生可静态部署的网页文件（未来可以直接生成各平台安装包），放到 GitHub Pages 之类的免费静态托管上就能让别人在线游玩。网页版带有强大的预加载机制，在较差的网络环境中也能尽力保障较好的使用体验。
+**部分兼容 Ren'Py 。** 素材目录（`gui/`、`images/bg/`、`images/char/<id>/`、`audio/`，含 `button/`、`overlay/` 子目录）、立绘站位与常见演出语义兼容 Ren'Py工程，已有的素材可以基本原样搬过来；`aliceadv rpy2adv` 把 `.rpy` 的剧本、`aliceadv gui2theme` 把 `gui.rpy` 布局换算成本引擎的脚本与配置，。
+**对AI辅助开发友好**。一直设想却没有足够的技术去做出自己想做的那个Galgame或乙女文字游戏？提供充足的文档和处理脚本，您可以直接把本仓库链接丢给您的智能体，即可让它学会使用本引擎，您只需要口述您的想法即可让它帮您将想法变成真实运行的游戏。
+
+引擎以 Python 包形式发布，未来还会发布一个图形化开发工具。
 
 ## 目录
 
@@ -22,25 +27,13 @@ AliceADV 是一款基于网页的 ADV（视觉小说）游戏引擎。它沿用 
 
 环境要求：Python >= 3.6。
 
-从源码安装：
+从pip安装：
 
 ```bash
-pip install ./aliceadv
+pip install aliceadv
 ```
 
-开发模式（可编辑安装）：
-
-```bash
-pip install -e ./aliceadv
-```
-
-验证安装：
-
-```bash
-aliceadv --version
-```
-
-命令输出包版本与引擎展示版本，两者同源（`aliceadv/src/aliceadv/_version.py`），因此始终一致，形如 `aliceADV 1.2.3 (engine v1.2.3)`。
+也可以在release手动下载构建好的whl安装。
 
 ## 快速开始
 

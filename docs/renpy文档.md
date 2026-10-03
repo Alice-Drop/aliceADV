@@ -7,6 +7,8 @@
 
 
 
+> 本文是 Ren'Py GUI 文档（中文翻译）的摘录，迁移时用来对照素材目录与布局约定。aliceADV 自身的配置项以 `样式控制.md` 为准。
+
 # GUI(图形用户接口)定制化指导[](https://doc.renpy.cn/zh-CN/gui.html#gui-customization-guide)
 
 Ren’Py的一个特色是，看起来挺萌的GUI系统。有需要的话还可以根据喜好完全替换成定制的GUI。本页内容阐述了如何制作出简单和中级的定制化GUI。

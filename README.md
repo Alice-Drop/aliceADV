@@ -2,9 +2,17 @@
 
 | English | [简体中文](./README_zh-CN.md) |
 
-AliceADV is a web-based ADV (visual novel) game engine. It follows the design language of Ren'Py: scenes, dialogue, characters, and branching are described in JSON, and the engine produces a static web game that runs in any browser.
+AliceADV is a web-based ADV (visual novel) game engine that makes it easy to build high-performance visual novel games.
 
-The engine ships as a Python package with a `create` / `build` command-line tool. The build output is plain HTML/CSS/JS with no server or runtime dependency — you can open `index.html` directly over `file://` or host it as a static site.
+**Developer-friendly.** Scripts are a flat JSON instruction stream (segments of instructions) and the interface is described by a single `theme.json`, so a complete game needs no Python or CSS. That is a convenience, not a limitation: the title, save, load, settings, chapters, branches, gallery, and about pages are all there, and transitions, NVL, autosave, skip, and key mapping are fully implemented.
+
+**Easy to publish.** A build produces plain static web files that can be deployed anywhere — native installers for each platform are on the way — so putting them on a free static host such as GitHub Pages is enough to let others play it online. The web build also ships with a preloading system that keeps the experience as good as it can be on a slow or unreliable network.
+
+**Partially compatible with Ren'Py.** Asset directories (`gui/`, `images/bg/`, `images/char/<id>/`, `audio/`, including the `button/` and `overlay/` subdirectories), sprite positions, and common presentation semantics are compatible with Ren'Py projects, so existing assets can be carried over as they are; `aliceadv rpy2adv` converts `.rpy` scripts and `aliceadv gui2theme` converts `gui.rpy` layout into this engine's script and configuration.
+
+**Friendly to AI-assisted development.** Have an idea for the galgame or otome text game you never had the skills to build? This repository ships the documentation and the helper scripts, so you can hand it to an AI agent and let it learn the engine — you describe the game you want, and it turns that into something you can actually run.
+
+The engine ships as a Python package, and a graphical development tool is on the way.
 
 ## Contents
 
@@ -22,27 +30,13 @@ The engine ships as a Python package with a `create` / `build` command-line tool
 
 Requirements: Python >= 3.6.
 
-Install from source:
+Install from PyPI:
 
 ```bash
-pip install ./aliceadv
+pip install aliceadv
 ```
 
-For development, install in editable mode:
-
-```bash
-pip install -e ./aliceadv
-```
-
-Verify:
-
-```bash
-aliceadv --version
-```
-
-The command prints the package version and the engine display version — both come from a
-single source (`aliceadv/src/aliceadv/_version.py`), so they always agree, e.g.
-`aliceADV 1.2.3 (engine v1.2.3)`.
+You can also download a prebuilt wheel from the releases page and install it directly.
 
 ## Quick start
 
