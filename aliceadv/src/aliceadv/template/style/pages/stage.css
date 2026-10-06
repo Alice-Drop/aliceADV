@@ -248,6 +248,14 @@
     transform: translateX(4px);
     background-image: var(--gui-choice-hover);
 }
+/* 键盘 / 手柄导航的当前项（动作 MenuUp / MenuDown 移动它，Confirm 选中）。
+ * 视觉上与 hover 一致再加一条描边：鼠标玩家看不到 hover 态时也能看到选中项。 */
+.choice.is-focused {
+    color: var(--color-hover);
+    background-image: var(--gui-choice-hover);
+    outline: calc(var(--design-w) * 2 / 1920) solid var(--color-hover);
+    outline-offset: calc(var(--design-w) * 2 / 1920);
+}
 .choice.is-visited { color: var(--color-accent); opacity: 0.6; }
 
 /* 底部工具栏（快速菜单）——参考 Ren'Py quick_menu：
@@ -359,4 +367,20 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .skip-indicator__arrow { animation: none; opacity: 1; }
+}
+
+/* ---------- 隐藏 UI（动作 HideUI） ----------
+ * 「看一眼立绘和背景」用的临时状态：整块界面件淡出，舞台画面本身不动。
+ * 只加在 #stage 上（由 engine.js 的 toggleUI 切换），不持久化 —— 离开舞台即复位。
+ * 用 opacity 而不是 display:none：一来保留淡出过渡，二来布局不跳（对话框的位置不变，
+ * 揭开时不会「文字整体挪一下」）。指针事件一并关掉，避免误点工具栏。
+ * 特异性 (1,2,0) 高于 .textbox.is-active / .toolbar__btn.is-active 这类 (0,2,0)，不必加 !important。 */
+#stage.is-ui-hidden .textbox,
+#stage.is-ui-hidden .toolbar,
+#stage.is-ui-hidden .notify,
+#stage.is-ui-hidden .skip-indicator,
+#stage.is-ui-hidden .choices {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
 }

@@ -247,6 +247,17 @@
         if (theme.notifyYpos != null) setVar("--notify-ypos", theme.notifyYpos);
         if (theme.skipYpos != null)   setVar("--skip-ypos",   theme.skipYpos);
 
+        // 手柄焦点框（识别到手柄时圈住候选按钮）。与 builder.build_css_vars 同名同源。
+        const f = theme.focus;
+        if (f) {
+            if (f.frameWidth != null)         setVar("--focus-frame-width", f.frameWidth);
+            if (f.frameColor != null)         setVar("--focus-frame-color", f.frameColor);
+            if (f.frameColorActive != null)   setVar("--focus-frame-color-active", f.frameColorActive);
+            if (f.glow != null)               setVar("--focus-glow", f.glow);
+            if (f.radius != null)             setVar("--focus-radius", f.radius);
+            if (f.transition != null)         setVar("--focus-transition", f.transition);
+        }
+
         /* 布局自由度（相对值 → 百分比 / em）。
          * 这里**只写 theme.json 里配了的值**，不再各带一份字面兜底默认值：
          *   默认值的唯一来源是模板 theme.json（构建时 _deep_merge(模板, 工程) 已合并进来），
@@ -601,66 +612,111 @@
     }
 
     /* ---------- 3.2 设置 ----------
-     * 选项不是静态装饰：每一项都从 AliceADVSettings（localStorage 持久化）读当前值渲染选中态，
-     * 点击写回 set()，并订阅变更保持界面同步。设置模块缺失时退化为「按默认值渲染、不可交互」。
+     * **渲染什么、什么顺序，由 theme.json 的 pages.settings.sections 决定**（不写死在本文件）：
+     *   "sections": [ { "title": "显示", "items": [ item… ] }, … ]
      *
-     * 三种控件形态：
-     *   分段按钮 seg    —— 单选（显示模式 / Rollback Side）
-     *   开关按钮 chip   —— 布尔项（快进模式各开关 / 全部静音）
-     *   滑块 settingSlider —— 数值项（速度 / 音量），可拖拽，右侧读百分比
+     * item 的三种形态：
+     *   1) 取值型控件   { "key": "textSpeed", "label": "文字显示速度", "hint": "…", "full": true }
+     *      取什么控件由 settings.js 的 SPECS[key].type 决定（bool→开关 / unit→滑块 /
+     *      int→带上下限的滑块 / enum→分段按钮 / action→动作下拉框）。
+     *      enum 项的选项文案写在这里：{ "options": [ {"value":"window","label":"窗口"} ] }。
+     *   2) 按键映射区块 { "type": "keymap", "title": "按键", "hint": "…" }
+     *   3) 未知 key —— 跳过并告警（页面配置与 SPECS 不许各说各话）。
+     *
+     * 每一项都从 AliceADVSettings（localStorage 持久化）读当前值渲染选中态，改动写回 set()，
+     * 并订阅变更保持界面同步。设置模块缺失时退化为「按默认值渲染、不可交互」。
      */
-    function fillSettingsGrid(body) {
+    function fillSettingsGrid(body, theme, cfg) {
         const S = global.AliceADVSettings;
         const wrap = el("div", { class: "settings" });
+        const sections = (cfg && Array.isArray(cfg.sections) && cfg.sections.length)
+            ? cfg.sections
+            : fallbackSettingsSections();
 
-        /* --- 显示 --- */
-        const fsOK = !S || S.isFullscreenSupported();
-        wrap.appendChild(settingsSection("显示", [
-            settingsField("显示模式", segmented("displayMode", [
-                { value: "window", label: "窗口" },
-                { value: "fullscreen", label: "全屏幕", disabled: !fsOK }
-            ]),
-                fsOK ? "全屏幕会在下次启动游戏、你第一次点击画面时自动申请进入；"
-                       + "按 ESC 退出全屏会自动切回窗口模式。"
-                     : "当前环境不允许进入全屏（可能被嵌入窗口限制），已锁定为窗口模式。",
-                true)
-        ]));
+        // 「全部静音」这类「打开即锁死其它项」的关系来自 SPECS 的 mutes，不写在页面上：
+        // 页面只负责把被锁的项渲染出来，锁不锁由规格说了算。
+        const muted = {};
+        if (S) S.keys().forEach(k => {
+            const sp = S.spec(k);
+            if (sp && sp.mutes && S.get(k)) sp.mutes.forEach(m => { muted[m] = true; });
+        });
 
-        /* --- 文本与播放 --- */
-        wrap.appendChild(settingsSection("文本与播放", [
-            settingsField("文字显示速度", settingSlider("textSpeed")),
-            settingsField("自动模式等待时间", settingSlider("autoWait")),
-            settingsField("Rollback Side", segmented("rollbackSide", [
-                { value: "disable", label: "Disable" },
-                { value: "left",    label: "Left" },
-                { value: "right",   label: "Right" }
-            ]), null, true),
-            settingsField("快进模式", chipRow([
-                chip("skipUnseen", "Unseen Text"),
-                chip("skipAfterChoice", "选项后"),
-                chip("skipTransitions", "转场特效")
-            ]), null, true)
-        ]));
-
-        /* --- 音量 --- */
-        const volSection = settingsSection("音量", [
-            settingsField("音乐音量", settingSlider("musicVolume")),
-            settingsField("音效音量", settingSlider("soundVolume")),
-            settingsField("语音音量", settingSlider("voiceVolume")),
-            settingsField("全部静音", chipRow([chip("muteAll", "Mute All")]),
-                "开启后音量条锁定当前值。")
-        ]);
-        wrap.appendChild(volSection);
-
-        // 静音时把音量区整体压暗：值仍然保留，只是不再可改。
-        const syncMute = function () {
-            if (!S) return;
-            volSection.classList.toggle("is-muted", !!S.get("muteAll"));
-        };
-        syncMute();
-        if (S) S.onChange(function (k) { if (k === "muteAll") syncMute(); });
+        sections.forEach(sec => {
+            if (!sec || !Array.isArray(sec.items)) return;
+            const fields = [];
+            sec.items.forEach(item => {
+                const node = settingsItem(item, theme, muted);
+                if (node) fields.push(node);
+            });
+            if (fields.length) wrap.appendChild(settingsSection(sec.title || "", fields));
+        });
 
         body.appendChild(wrap);
+    }
+
+    /* 没配 pages.settings.sections 时的兜底：把 SPECS 里登记过的项按登记顺序铺成一页。
+     * 真正的默认版面写在模板 theme.json（默认值的唯一来源），这里只为「配置缺失时页面不空白」。 */
+    function fallbackSettingsSections() {
+        const S = global.AliceADVSettings;
+        if (!S) return [];
+        return [{ title: "设置", items: S.keys().map(k => ({ key: k })) }];
+    }
+
+    // 一条 item → 一个字段节点（含控件与说明）；无法渲染时返回 null
+    function settingsItem(item, theme, muted) {
+        if (!item || typeof item !== "object") return null;
+        if (item.type === "keymap") return keymapBlock(item, theme);
+        if (!item.key) return null;
+        const S = global.AliceADVSettings;
+        const spec = S ? S.spec(item.key) : null;
+        if (!spec) {
+            console.warn("[aliceADV] 设置页引用了未登记的设置项，已跳过:", item.key);
+            return null;
+        }
+        const label = item.label || item.key;
+        let control = null;
+        let field = null;
+        switch (spec.type) {
+            case "bool":
+                // 开关类：文案就写在开关上，不再重复一行标签
+                control = chipRow([chip(item.key, item.chipLabel || label)]);
+                field = settingsField(null, control, item.hint, item.full);
+                break;
+            case "unit":
+            case "int":
+                control = settingSlider(item.key, spec);
+                break;
+            case "enum": {
+                const opts = (Array.isArray(item.options) && item.options.length)
+                    ? item.options
+                    : spec.options.map(v => ({ value: v, label: v }));
+                const disable = enumDisable(item.key);
+                control = segmented(item.key, opts.map(o => ({
+                    value: o.value,
+                    label: o.label || o.value,
+                    disabled: !!(disable && disable[o.value] && disable[o.value]())
+                })));
+                break;
+            }
+            case "action":
+                control = actionSelect(item.key);
+                break;
+            default:
+                return null;
+        }
+        if (!field) field = settingsField(label, control, item.hint, item.full);
+        if (muted && muted[item.key]) field.classList.add("is-muted");
+        return field;
+    }
+
+    /* 某些枚举值在特定环境下不可用（当前只有「全屏幕」）。这是**引擎能力判断**，
+     * 不是文案，因此留在这里而不是 theme.json。 */
+    function enumDisable(key) {
+        const S = global.AliceADVSettings;
+        if (key === "displayMode") {
+            return { fullscreen: function () { return !(S && S.isFullscreenSupported && S.isFullscreenSupported()); } };
+        }
+        return null;
     }
 
     /* 分区容器：标题 + 两列字段网格 */
@@ -673,10 +729,11 @@
         return sec;
     }
 
-    /* 单个字段：标签 + 控件 + 可选说明。full = 独占整行 */
+    /* 单个字段：标签 + 控件 + 可选说明。full = 独占整行；
+     * 不给 labelText 时不渲染标签行（开关类把文案写在开关上）。 */
     function settingsField(labelText, control, hint, full) {
         const f = el("div", { class: "settings-field" + (full ? " settings-field--full" : "") });
-        f.appendChild(el("div", { class: "settings-label", text: labelText }));
+        if (labelText) f.appendChild(el("div", { class: "settings-label", text: labelText }));
         if (control) f.appendChild(control);
         if (hint) f.appendChild(el("div", { class: "settings-hint", text: hint }));
         return f;
@@ -726,9 +783,25 @@
         return el("div", { class: "chip-row" }, chips);
     }
 
-    /* 数值滑块：可拖拽，右侧显示百分比 */
-    function settingSlider(key) {
+    /* 数值滑块：
+     *   unit 类型（速度 / 音量）—— 值域 0~1，右侧读百分比
+     *   int 类型（毫秒）—— 值域取 SPECS 的 min~max、按 step 吸附，右侧读原值 + 单位
+     * 上下限与步长都来自 settings.js 的 SPECS，不在这里再写一份，也不写进 theme.json。 */
+    function settingSlider(key, spec) {
         const S = global.AliceADVSettings;
+        const isInt = !!(spec && spec.type === "int");
+        const lo = (isInt && spec.min != null) ? spec.min : 0;
+        const hi = (isInt && spec.max != null) ? spec.max : 1;
+        const step = (isInt && spec.step) ? spec.step : 0;
+        const toRatio = v => (hi === lo) ? 0 : Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
+        const fromRatio = r => {
+            let v = lo + (hi - lo) * r;
+            if (step) v = Math.round(v / step) * step;
+            v = Math.min(hi, Math.max(lo, v));
+            return isInt ? Math.round(v) : v;
+        };
+        const read = v => isInt ? (String(v) + (spec.unit || "")) : (Math.round(v * 100) + "%");
+
         const row = el("div", { class: "slider-row" });
         const root = el("div", { class: "slider", "data-setting": key });
         const track = el("div", { class: "slider__track" });
@@ -740,12 +813,12 @@
         row.appendChild(root); row.appendChild(readout);
 
         const paint = function (v) {
-            const pct = Math.round(v * 100);
+            const pct = Math.round(toRatio(v) * 100);
             thumb.style.left = pct + "%";
             fill.style.width = pct + "%";
-            readout.textContent = pct + "%";
+            readout.textContent = read(v);
         };
-        const sync = function () { paint(S ? S.get(key) : 0.5); };
+        const sync = function () { paint(S ? S.get(key) : spec.def); };
         // 舞台是整体 scale() 缩放的，用 getBoundingClientRect 取到的就是屏幕实际坐标，
         // 因此按 clientX 换算比例天然正确，不需要再除缩放系数。
         const ratioAt = function (clientX) {
@@ -757,8 +830,8 @@
             if (!S) return;
             e.preventDefault();
             if (root.setPointerCapture) { try { root.setPointerCapture(e.pointerId); } catch (err) {} }
-            S.set(key, ratioAt(e.clientX));
-            const move = function (ev) { S.set(key, ratioAt(ev.clientX)); };
+            S.set(key, fromRatio(ratioAt(e.clientX)));
+            const move = function (ev) { S.set(key, fromRatio(ratioAt(ev.clientX))); };
             const up = function () {
                 root.removeEventListener("pointermove", move);
                 root.removeEventListener("pointerup", up);
@@ -770,6 +843,143 @@
         });
         sync();
         if (S) S.onChange(function (k) { if (k === key) sync(); });
+        return row;
+    }
+
+    /* 动作下拉框（值域 = input.js 的动作表）：给「快捷轮盘」的五个方向选动作。
+     * 「无」= 该方向不装动作。动作列表不在这里写死，新增动作不必改本文件。 */
+    function actionSelect(key) {
+        const S = global.AliceADVSettings;
+        const I = global.AliceADVInput;
+        const sel = el("select", { class: "sel", "data-setting": key });
+        sel.appendChild(el("option", { value: "none", text: "无" }));
+        if (I) I.actions().forEach(a => sel.appendChild(el("option", { value: a.id, text: a.label })));
+        const sync = function () { sel.value = S ? String(S.get(key)) : "none"; };
+        sel.addEventListener("change", function () { if (S) S.set(key, sel.value); });
+        sync();
+        if (S) S.onChange(function (k) { if (k === key) sync(); });
+        return sel;
+    }
+
+    /* ---------- 3.2.1 按键映射区块 ----------
+     * 每个动作一行：动作名 / 推荐方案下拉框 / 当前生效的键位。
+     * 下拉框的选项 = 开发者写在 theme.json input.presets 里的**推荐方案**（名字由作者定）
+     *   + 「自定义」。选推荐方案 = 跟随作者给的默认映射（且日后作者改了推荐，玩家自动跟着变）；
+     *   选自定义 = 玩家自己按下按键，存进 localStorage（aliceadv.bindings.<游戏名>）。
+     * 这是「推荐」而非「强绑」：玩家随时可以逐动作改，改动只落本地、不改产物。
+     */
+    function keymapBlock(item, theme) {
+        const I = global.AliceADVInput;
+        const wrap = el("div", { class: "keymap" });
+        if (item.title) wrap.appendChild(el("div", { class: "keymap__title", text: item.title }));
+        if (item.hint) wrap.appendChild(el("div", { class: "settings-hint", text: item.hint }));
+        if (!I) {
+            wrap.appendChild(el("div", { class: "settings-hint",
+                text: "输入系统未加载（style/input.js 缺失），本页无法修改按键映射。" }));
+            return wrap;
+        }
+        const presets = I.presets();
+        if (!presets.length) {
+            wrap.appendChild(el("div", { class: "settings-hint",
+                text: "本作未提供推荐按键方案（theme.json 的 input.presets 为空），所有动作都需自行设定。" }));
+        }
+        const list = el("div", { class: "keymap__list" });
+        I.actions().forEach(a => list.appendChild(keymapRow(a, presets)));
+        wrap.appendChild(list);
+        return wrap;
+    }
+
+    function keymapRow(a, presets) {
+        const I = global.AliceADVInput;
+        const row = el("div", { class: "keymap__row", "data-action": a.id });
+
+        function render() {
+            clearChildren(row);
+            row.appendChild(el("div", { class: "keymap__action", text: a.label }));
+
+            // ① 推荐方案 / 自定义
+            const sel = el("select", { class: "keymap__select" });
+            presets.forEach(p => {
+                const desc = I.describeBindings(I.presetBindings(p.id, a.id)) || "未绑定";
+                sel.appendChild(el("option", { value: "p:" + p.id, text: p.label + "：" + desc }));
+            });
+            sel.appendChild(el("option", { value: "custom", text: "自定义" }));
+            const chosen = I.selection(a.id);
+            sel.value = (chosen.custom || !chosen.preset || !presets.length) ? "custom" : "p:" + chosen.preset;
+            // 玩家选过的推荐方案已被作者删掉：value 落空 → 回落自定义，不静默错位
+            if (!sel.value) sel.value = "custom";
+            sel.addEventListener("change", function () {
+                if (sel.value === "custom") {
+                    const c = I.selection(a.id);
+                    I.setSelection(a.id, { custom: (c.custom || []).slice() });
+                    render();
+                    beginCapture();          // 选「自定义」即进入捕获，少点一次
+                } else {
+                    I.setSelection(a.id, { preset: sel.value.slice(2) });
+                    render();
+                }
+            });
+            row.appendChild(sel);
+
+            // ② 当前生效的键位（自定义时可直接删/加）
+            const now = I.selection(a.id);
+            const custom = !!now.custom;
+            const keys = custom ? now.custom : I.bindingsFor(a.id);
+            const box = el("div", { class: "keymap__keys" });
+            if (keys.length) {
+                keys.forEach(b => {
+                    const tag = el("span", { class: "keytag" });
+                    tag.appendChild(el("span", { class: "keytag__text", text: I.describeBinding(b) }));
+                    if (custom) {
+                        const del = el("button", { type: "button", class: "keytag__del", text: "×" });
+                        del.setAttribute("title", "移除这个按键");
+                        del.addEventListener("click", function () {
+                            I.setSelection(a.id, { custom: keys.filter(x => x !== b) });
+                            render();
+                        });
+                        tag.appendChild(del);
+                    }
+                    box.appendChild(tag);
+                });
+            } else {
+                box.appendChild(el("span", { class: "keymap__empty", text: "未绑定" }));
+            }
+            if (custom) {
+                const add = el("button", { type: "button", class: "keymap__add", text: "＋ 添加按键" });
+                add.addEventListener("click", beginCapture);
+                box.appendChild(add);
+                const clear = el("button", { type: "button", class: "keymap__clear", text: "清空" });
+                clear.addEventListener("click", function () {
+                    I.setSelection(a.id, { custom: [] });
+                    render();
+                });
+                box.appendChild(clear);
+            }
+            row.appendChild(box);
+
+            // ③ 撞键提示：同一个键被两个动作用，玩家的预期就不成立了，这里如实说出来
+            const conf = I.conflicts(a.id);
+            if (conf.length) {
+                row.appendChild(el("div", { class: "keymap__warn",
+                    text: "与「" + conf.map(id => I.actionLabel(id)).join("、") + "」使用了相同的按键，"
+                         + "按下时按优先级只触发其中一个。" }));
+            }
+
+            /* 捕获期间把「＋ 添加按键」变成提示语，取消或完成都要还原 ——
+             * 因此渲染要能被 beginCapture 反过来调用，且取消走 input 的 onCancel。 */
+            function beginCapture() {
+                const addBtn = box.querySelector(".keymap__add");
+                if (addBtn) addBtn.textContent = "请按下要绑定的按键…（Esc 取消）";
+                I.captureStart(function (binding) {
+                    const cur = I.selection(a.id).custom || [];
+                    if (cur.indexOf(binding) === -1) cur.push(binding);
+                    I.setSelection(a.id, { custom: cur });
+                    render();
+                }, render);
+            }
+        }
+
+        render();
         return row;
     }
 
@@ -890,7 +1100,7 @@
         switch (pageId) {
             case "page_save":     return fillSlotsGrid(body, theme, cfg, true);
             case "page_load":     return fillSlotsGrid(body, theme, cfg, false);
-            case "page_settings": return fillSettingsGrid(body);
+            case "page_settings": return fillSettingsGrid(body, theme, cfg);
             case "page_chapters": return fillChapterList(body, theme);
             case "page_branches": return fillBranchList(body, theme);
             case "page_gallery":  return fillGallery(body, theme);

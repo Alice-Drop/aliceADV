@@ -71,7 +71,13 @@
         typePauseTimer: null,  // 句中 {w=N} 计时续打 timer
         waitTimer: null,       // 定时等待 timer（可点击跳过）
         history: [],           // [{name, text}]
-        snaps: [],             // 每句台词后的快照（用于后退一句）
+        snaps: [],             // 每句台词后的快照（用于后退一句 / 滚轮回看）
+        viewIdx: 0,            // 「此刻正在看」的快照下标（= snaps 末尾即当前，< 末尾即回看中）
+        choiceIdx: 0,          // 选项高亮下标（键盘 / 手柄导航）
+        choiceNodes: null,     // 当前选项按钮节点（高亮与确认用）
+        choiceOpts: null,      // 对应的选项数据
+        skipUnseenOverride: null, // 本次会话的「跳过已读」覆盖（SkipRead / SkipAll 动作设置它）
+        ffActive: false,       // 「快进」按住生效的进行中标记
         vars: {},              // 全局变量（游玩期有效，start/exit 重置）
         chapters: null,        // 两层次：章节元数据（宏观组织）
         initVars: {},          // 变量初始值副本
@@ -118,6 +124,10 @@
         // 指示条同样要能动。
         if (global.AliceADVEngine && global.AliceADVEngine.setSkipIndicator) {
             global.AliceADVEngine.setSkipIndicator(state.skip);
+        }
+        // 工具栏按钮的选中态是「自动 / 跳过」的纯视图，与指示条同理，只在这一个汇点同步
+        if (global.AliceADVEngine && global.AliceADVEngine.syncToolbar) {
+            global.AliceADVEngine.syncToolbar();
         }
         const P = global.AliceADVPreload;
         if (!P) return;
@@ -1056,16 +1066,46 @@
             textEl.textContent = resolveText(c.prompt || "");
             box.classList.add("is-active"); // 选项提示语需要显示对话框
         }
-        (c.options || []).forEach(opt => {
+        state.choiceIdx = 0;
+        state.choiceNodes = [];
+        state.choiceOpts = (c.options || []).slice();
+        state.choiceOpts.forEach(opt => {
             const btn = el("button", "choice paper", opt.text);
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 pickChoice(opt);
             });
             choices.appendChild(btn);
+            state.choiceNodes.push(btn);
         });
+        paintChoiceFocus();
         state.deciding = true;
         state.waiting = true;
+        // 设置项「选项后」关掉时：跳过遇到选项就停（默认开着 = 跳过会跨过选项继续）
+        if (state.skip && !skipAfterChoiceOn()) setSkip(false);
+    }
+
+    /* 选项高亮：键盘 / 手柄用「列表上移 / 下移 / 确认」三个动作操作选项，
+     * 鼠标仍然直接点。高亮只是视觉标记，真正的选择仍走 pickChoice 一条路。 */
+    function paintChoiceFocus() {
+        const nodes = state.choiceNodes || [];
+        nodes.forEach((n, i) => n.classList.toggle("is-focused", i === state.choiceIdx));
+    }
+
+    function moveChoice(delta) {
+        const nodes = state.choiceNodes || [];
+        if (!state.deciding || !nodes.length) return false;
+        const n = nodes.length;
+        state.choiceIdx = ((state.choiceIdx + delta) % n + n) % n;
+        paintChoiceFocus();
+        return true;
+    }
+
+    function confirmChoice() {
+        const opts = state.choiceOpts || [];
+        if (!state.deciding || !opts.length) return false;
+        pickChoice(opts[state.choiceIdx] || opts[0]);
+        return true;
     }
 
     function pickChoice(opt) {
@@ -1074,12 +1114,14 @@
         if (opt.set) (Array.isArray(opt.set) ? opt.set : [opt.set]).forEach(applySetSpec);
         const root = stageRoot();
         clearNode(root.querySelector(".choices"));
+        state.choiceNodes = null;
+        state.choiceOpts = null;
         state.deciding = false;
         state.waiting = false;
         jumpTo(opt.goto);
     }
 
-    /* ---------- 快照（后退一句） ---------- */
+    /* ---------- 快照（后退一句 / 滚轮回看） ---------- */
     function snapshot(lineCmd) {
         state.snaps.push({
             seg: state.seg,
@@ -1095,6 +1137,7 @@
             // 仅靠 historyLen 无法区分各快照对应的合并文本，整体复制最稳妥。
             history: state.history.map(h => ({ name: h.name, text: h.text }))
         });
+        state.viewIdx = state.snaps.length - 1;   // 新快照 = 新的「当前位置」
     }
 
     function applySnap(s) {
@@ -1146,18 +1189,130 @@
         }
     }
 
-    function rollback() {
-        if (!state.playing) return;
-        if (finishTyping()) return; // 打字中先补全
-        if (state.deciding) { /* 选项界面后退：回到判定前一句 */ }
-        if (state.snaps.length < 2) return;
-        state.snaps.pop();
-        applySnap(state.snaps[state.snaps.length - 1]);
-        const s = state.snaps[state.snaps.length - 1];
+    /* ---------- 回退 / 回看 ----------
+     * 两个概念分开：
+     *   位置 (state.viewIdx) = 「此刻屏幕上显示的是哪一条快照」，可以来回移动；
+     *   未来 (state.snaps 里 viewIdx 之后的部分) = 只有真正推进剧情时才丢弃。
+     * 于是「上一句」与「滚轮回看」共用同一套移动逻辑，区别只在是否丢弃未来：
+     *   Rollback / 点击推进 → 丢弃未来，等价 Ren'Py 的 rollback + 继续（改写历史）；
+     *   ScrollBack / ScrollForward（滚轮）→ 只移动位置，向下滚能原样回到当前位置。
+     * 「滚轮向下不能推进到下一句」由此自然成立：scrollForward 的上界就是当前位置。
+     */
+    function applySnapIndex(i) {
+        const s = state.snaps[i];
+        if (!s) return false;
+        state.deciding = false;      // applySnap 内的 showDecide 会按快照重新置位
+        state.viewIdx = i;
+        applySnap(s);
         state.seg = s.seg;
         state.idx = s.idx + 1;
         state.waiting = true;
+        return true;
     }
+
+    function rollback() {
+        if (!state.playing) return false;
+        if (finishTyping()) return true;          // 打字中先补全（同 Ren'Py：一次操作只做一件初步的事）
+        if (state.viewIdx <= 0) return false;
+        return applySnapIndex(state.viewIdx - 1);
+    }
+
+    // 回看：向上回到更早的一句（不丢弃未来）
+    function scrollBack(step) {
+        if (!state.playing) return false;
+        if (state.typing) finishTyping();
+        const n = Math.max(1, Number(step) || 1);
+        const target = Math.max(0, state.viewIdx - n);
+        if (target === state.viewIdx) return false;
+        const ok = applySnapIndex(target);
+        if (ok) reviewHint(true);
+        return ok;
+    }
+
+    // 回到当前位置：向下滚到快照末尾为止，**不会**推进到下一句
+    function scrollForward(step) {
+        if (!state.playing) return false;
+        if (state.typing) finishTyping();
+        const n = Math.max(1, Number(step) || 1);
+        const last = state.snaps.length - 1;
+        const target = Math.min(last, state.viewIdx + n);
+        if (target === state.viewIdx) return false;   // 已在当前位置：什么也不做
+        const ok = applySnapIndex(target);
+        if (ok && state.viewIdx >= last) reviewHint(false);
+        return ok;
+    }
+
+    // 回看状态提示（用通知条，不额外占版面）：进入回看提示一次，回到当前位置提示一次
+    let reviewNotified = false;
+    function reviewHint(entering) {
+        if (!global.AliceADVEngine || !global.AliceADVEngine.notify) return;
+        if (entering) {
+            if (reviewNotified) return;
+            reviewNotified = true;
+            global.AliceADVEngine.notify("回看中 · 向下滚动回到当前");
+        } else if (reviewNotified) {
+            reviewNotified = false;
+        }
+    }
+
+    function isReviewing() { return state.viewIdx < state.snaps.length - 1; }
+
+    /* ---------- 已读标记（跳过已读的判据） ----------
+     * 「读过没有」是跨存档、跨周目的玩家属性，因此按「剧本文件 + 段 + 指令下标」记到
+     * localStorage（aliceadv.seen.<游戏名>）。键里带剧本路径，不同章的同名段不会互相污染。
+     * 记录只在显示过这条文本时发生（见 exec 的 say/narrate），因此「读到这里」是真实发生过的。 */
+    const SEEN_PREFIX = "aliceadv.seen.";
+    const SEEN_LIMIT = 20000;          // 上限：超出后丢最早的（Set 保序，删除第一个即可）
+    let seen = null;
+
+    function seenKey() {
+        const S = global.AliceADVSettings;
+        if (S && S.storageKeyFor) return S.storageKeyFor(SEEN_PREFIX);
+        return SEEN_PREFIX + "default";
+    }
+    function loadSeen() {
+        if (seen) return seen;
+        try {
+            const raw = localStorage.getItem(seenKey());
+            const arr = raw ? JSON.parse(raw) : [];
+            seen = new Set(Array.isArray(arr) ? arr : []);
+        } catch (e) { seen = new Set(); }
+        return seen;
+    }
+    function saveSeen() {
+        try { localStorage.setItem(seenKey(), JSON.stringify(Array.from(loadSeen()))); }
+        catch (e) { /* 存储不可用：本次会话内仍有效 */ }
+    }
+    function lineId(seg, idx) { return ((state.script && state.script.__path) || "") + "#" + seg + "#" + idx; }
+    function markSeen(seg, idx) {
+        const s = loadSeen();
+        const id = lineId(seg, idx);
+        if (s.has(id)) return;
+        s.add(id);
+        if (s.size > SEEN_LIMIT) {
+            const first = s.values().next();
+            if (!first.done) s.delete(first.value);
+        }
+        saveSeen();
+    }
+    function isSeenLine(seg, idx) { return loadSeen().has(lineId(seg, idx)); }
+
+    // 「跳过时是否连没读过的文本也跳」：本次会话的覆盖优先（SkipRead / SkipAll 动作设置的），
+    // 否则读设置项 skipUnseen（设置页「快进模式 · Unseen Text」）。
+    function skipUnseenOn() {
+        if (state.skipUnseenOverride != null) return !!state.skipUnseenOverride;
+        const S = global.AliceADVSettings;
+        return S ? !!S.get("skipUnseen") : false;
+    }
+
+    // 「跳过一个选项之后是否继续跳」：设置项 skipAfterChoice，默认开（＝保持旧行为）。
+    // 关掉时，遇到选项就结束跳过，让玩家自己读完选项 —— 对齐 Ren'Py 的 Skip after choices。
+    function skipAfterChoiceOn() {
+        const S = global.AliceADVSettings;
+        return S ? !!S.get("skipAfterChoice") : true;
+    }
+
+    function isTextCmd(c) { return !!c && (c.cmd === "say" || c.cmd === "narrate"); }
 
     /* ---------- 存档 / 读档（localStorage） ---------- */
     // 存档槽分三类：auto（自动存档）/ quick（快速存档）/ manual（手动存档）。
@@ -1290,6 +1445,7 @@
             state.seg = snap.seg;
             state.idx = snap.idx + 1;
             state.snaps = [ JSON.parse(JSON.stringify(snap)) ];
+            state.viewIdx = 0;
             applySnap(snap);
             renderHistory();
         }
@@ -1327,6 +1483,12 @@
      */
     async function advance() {
         if (!state.playing) return;
+        // 回看之后又推进 = 改写未来：丢弃「此刻位置」之后的快照（同 Ren'Py rollback）。
+        // 不做这一步的话，回看后继续播放会与旧快照混在一起，后退会跳回看过的分支。
+        if (state.viewIdx < state.snaps.length - 1) {
+            state.snaps.length = state.viewIdx + 1;
+            reviewNotified = false;
+        }
         const epoch = state.epoch;
         state.step++;             // 推进计数。转场用它判断「解码期间这一步有没有被别处推过」
                                   //（见 setBg）——只声明不递增会让那个判断永远是假，成为死代码
@@ -1356,6 +1518,11 @@
                 state.barrier = true;
                 try { await pending; } finally { state.barrier = false; }
                 if (!state.playing || state.epoch !== epoch) return; // 等待期间退出了播放
+            }
+            // 跳过已读：遇到**没读过**的文本就停下，把这一句正常显示给玩家。
+            // 判据只看「这条指令会不会显示文本」，不看它是不是阻塞指令（wait/pause 也要停得下来）。
+            if (state.skip && !skipUnseenOn() && isTextCmd(c) && !isSeenLine(state.seg, state.idx)) {
+                setSkip(false);
             }
             const blocking = exec(c);
             state.idx++;
@@ -1442,6 +1609,7 @@
                     state.history.push({ name: "", text: rtext });
                     renderHistory();
                     c._resolved = rtext;
+                    markSeen(state.seg, state.idx);   // 已读标记：真正的「读到这里了」
                     snapshot(c);
                     return true;
                 }
@@ -1452,6 +1620,7 @@
                 renderHistory();
                 setTextbox("", rtext2, null, "");
                 c._resolved = rtext2;
+                markSeen(state.seg, state.idx);
                 snapshot(c);
                 return true;
             }
@@ -1495,6 +1664,7 @@
                     } else {
                         state.waiting = true; // 默认等同普通句：等玩家点击
                     }
+                    markSeen(state.seg, state.idx);
                     snapshot(c);
                     return true;
                 }
@@ -1506,6 +1676,7 @@
                 setTextbox(name, rtext, profile.textbox || null, color);
                 if (c.voice && !skipVoiceNow()) playVoice(c.voice, c.voiceVolume); // 台词绑定语音（一次性）
                 c._resolved = rtext; // 供回溯重建整行
+                markSeen(state.seg, state.idx);
                 snapshot(c);
                 return true;
             }
@@ -1720,9 +1891,11 @@
         state.nvlLines = [];
         state.history = [];
         state.snaps = [];
+        state.viewIdx = 0;
         state.typing = state.typePauseTimer = null;
         state.awaitClick = false;
         state.typeParts = null; state.typeSi = 0; state.typeCi = 0; state.typePrefix = "";
+        state.choiceNodes = null; state.choiceOpts = null; state.choiceIdx = 0;
         state.playing = true;
         state.waiting = false;
         state.deciding = false;
@@ -1753,6 +1926,13 @@
         state.skip = false;
         state.waiting = false;
         state.deciding = false;
+        state.choiceNodes = null;
+        state.choiceOpts = null;
+        state.choiceIdx = 0;
+        state.viewIdx = 0;          // 回看位置随播放一起归零（下一局从头开始）
+        state.skipUnseenOverride = null;   // SkipRead / SkipAll 的会话级覆盖不跨局
+        state.ffActive = false;            // 「快进」按住状态也不跨局
+        reviewNotified = false;
         state.barrier = false;   // 上一局的兜底等待不能跟着走到下一局（在途的 await 由 epoch 拦下）
         state.epoch++;           // 作废所有在途的 advance() 续跑
         lineClock = 0;
@@ -1775,6 +1955,7 @@
         resetStage();
         state.script = null;
         state.snaps = [];
+        state.viewIdx = 0;
     }
 
     /* ---------- 自动 / 快进 ----------
@@ -1799,8 +1980,90 @@
         return state.skip;
     }
 
+    /* 三种跳过语义（SkipRead / SkipAll / FastForward 三个动作各取其一）：
+     *   setSkipRead(true)  —— 只跳已读：遇到没读过的文本自动停下（见 advance 的判据）
+     *   setSkipAll(true)   —— 无差别跳过，直到选项或章节结束
+     *   setFastForward(on) —— 按住生效，松开恢复按住之前的状态
+     * override 只是**本次会话**的覆盖，设置项 skipUnseen 仍是「不按动作时的默认口径」。 */
+    function setSkipRead(on) {
+        state.skipUnseenOverride = on ? false : null;
+        return setSkip(on);
+    }
+    function setSkipAll(on) {
+        state.skipUnseenOverride = on ? true : null;
+        return setSkip(on);
+    }
+
+    let ffPrevSkip = false;
+    function setFastForward(on) {
+        if (!state.playing) return false;
+        if (on) {
+            if (state.ffActive) return true;
+            ffPrevSkip = state.skip;
+            state.ffActive = true;
+            state.skipUnseenOverride = true;      // 快进就是快进，不再按已读停
+            setSkip(true);
+        } else {
+            if (!state.ffActive) return true;
+            state.ffActive = false;
+            state.skipUnseenOverride = null;
+            setSkip(!!ffPrevSkip);                // 恢复按住之前的状态
+        }
+        return true;
+    }
+
+    /* ---------- 剧情侧的动作接线（input.js） ----------
+     * 返回 true = 「我处理了」，派发链就此停下（见 input.js 文件头的派发顺序）。
+     * 页面类动作（菜单 / 存档页 / 设置 / 截图…）由 engine.js 注册，不在这里。
+     *
+     * 守卫 stageActive()：剧情动作只在「舞台上、没有浮层、正在播放」时生效。
+     * 少了它，在存档页按回车会推进看不见的剧情。
+     */
+    function stageActive() {
+        if (!state.playing) return false;
+        const E = global.AliceADVEngine;
+        if (E && E.state && E.state.currentPage !== "page_stage") return false;
+        if (E && E.anyOverlayOpen && E.anyOverlayOpen()) return false;
+        return true;
+    }
+
+    function bindInputActions() {
+        const I = global.AliceADVInput;
+        if (!I) return;
+        I.registerAll({
+            Advance:        function () { if (!stageActive()) return false; next(); return true; },
+            Rollback:       function () { if (!stageActive()) return false; return rollback(); },
+            ScrollBack:     function (ev) { if (!stageActive()) return false; return scrollBack(ev && ev.step); },
+            ScrollForward:  function (ev) { if (!stageActive()) return false; return scrollForward(ev && ev.step); },
+            Auto:           function () { if (!stageActive()) return false; setAuto(!state.auto); return true; },
+            SkipRead:       function () { if (!stageActive()) return false; setSkipRead(!state.skip); return true; },
+            SkipAll:        function () { if (!stageActive()) return false; setSkipAll(!state.skip); return true; },
+            FastForward:    function (ev) { if (!stageActive()) return false; return setFastForward(ev && ev.phase !== "release"); },
+            Confirm:        function () { if (!stageActive()) return false; return confirmChoice(); },
+            MenuUp:         function () { if (!stageActive()) return false; return moveChoice(-1); },
+            MenuDown:       function () { if (!stageActive()) return false; return moveChoice(1); }
+        });
+        // 可用性（径向菜单置灰、按钮状态）：剧情没开始 / 没有可回退的历史时对应动作禁用
+        I.registerAvailability("Advance", stageActive);
+        I.registerAvailability("Auto", stageActive);
+        I.registerAvailability("SkipRead", stageActive);
+        I.registerAvailability("SkipAll", stageActive);
+        I.registerAvailability("FastForward", stageActive);
+        I.registerAvailability("Rollback", function () { return stageActive() && state.viewIdx > 0; });
+        I.registerAvailability("ScrollBack", function () { return stageActive() && state.viewIdx > 0; });
+        I.registerAvailability("ScrollForward", function () { return stageActive() && isReviewing(); });
+    }
+
     global.AliceADVScript = {
         start, next, rollback, exit, setAuto, setSkip, renderHistory,
+        // 回看（滚轮 / 动作 ScrollBack·ScrollForward）：移动「正在看的位置」，不丢弃未来
+        scrollBack, scrollForward, isReviewing,
+        // 三种跳过语义（动作 SkipRead / SkipAll / FastForward）
+        setSkipRead, setSkipAll, setFastForward,
+        // 选项的键盘 / 手柄导航（动作 MenuUp / MenuDown / Confirm）
+        moveChoice, confirmChoice,
+        // 已读标记（跳过已读的判据；工程自定义 UI 也可读）
+        isSeen: isSeenLine, markSeen,
         saveAuto, saveQuick, saveManual, loadAuto, loadQuick,
         load, getSave, autoSaveEnabled, quickSaveEnabled,
         resetStage,          // 舞台复位（离开/进入播放共用；测试与自定义 UI 也可直接调用）
@@ -1808,4 +2071,7 @@
         isPlaying: () => state.playing,
         history: () => state.history
     };
+
+    // 把剧情侧的动作接到输入系统（页面的动作在 engine.js 里接）
+    bindInputActions();
 })(window);

@@ -22,6 +22,9 @@
     <link rel="stylesheet" href="style/pages/menu.css">
     <link rel="stylesheet" href="style/pages/history.css">
     <link rel="stylesheet" href="style/pages/popup.css">
+    <!-- 快捷轮盘（长按呼出）是挂在 body 上的全局组件，不属于任何一页 -->
+    <link rel="stylesheet" href="style/pages/radial.css">
+    <link rel="stylesheet" href="style/pages/focus.css">
     <link rel="icon" href="data:,">
 </head>
 <body>
@@ -92,6 +95,10 @@
     <!-- 设置系统：提供 localStorage 持久化与显示模式（窗口 / 浏览器全屏），
          必须早于 theme.js —— 设置页在 buildAll 时就要读当前值来渲染选中态。 -->
     <script src="style/settings.js"></script>
+    <!-- 输入系统：把键盘 / 鼠标 / 滚轮 / 手柄事件翻译成「动作」再派发（详见 input.js）。
+         必须早于 theme.js / script.js / engine.js —— 后两者要向它注册动作处理器，
+         设置页也要读它的推荐方案渲染按键映射表。 -->
+    <script src="style/input.js"></script>
     <script src="style/theme.js"></script>
     <script src="style/preload.js"></script>
     <script src="style/script.js"></script>
@@ -114,6 +121,9 @@
             // 主题未就绪时会退化成 "default"，与 buildAll 之后存下的不是同一份。
             // init() 读到「全屏幕」时挂一次性手势监听：玩家首次点击画面后向浏览器申请全屏。
             if (window.AliceADVSettings) window.AliceADVSettings.init();
+            // 输入系统：挂全局事件监听（键盘 / 鼠标 / 滚轮 / 手柄 / 长按轮盘）。
+            // 动作处理器在此之前已由 script.js / engine.js 注册好（它们在脚本加载时就注册）。
+            if (window.AliceADVInput) window.AliceADVInput.init();
             // 启动加载遮罩：按 info.json preload.boot 策略强制预加载，
             // 就绪（或总超时兜底）后渐隐遮罩，再绑定引擎事件，避免遮罩期间误触。
             if (window.AliceADVPreload) {

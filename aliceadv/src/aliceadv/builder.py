@@ -143,6 +143,23 @@ def build_css_vars(theme):
     if theme.get("skipYpos") is not None:
         lines.append(f"  --skip-ypos: {theme['skipYpos']};")
 
+    # 手柄焦点框（仅识别到手柄时显示）：粗细 / 颜色 / 光晕 / 圆角 / 过渡。
+    # 与 theme.js applyThemeVars 同名同源；默认值的唯一来源是模板 theme.json 的 focus 块。
+    f = theme.get("focus")
+    if isinstance(f, dict):
+        if f.get("frameWidth") is not None:
+            lines.append(f"  --focus-frame-width: {f['frameWidth']};")
+        if f.get("frameColor") is not None:
+            lines.append(f"  --focus-frame-color: {f['frameColor']};")
+        if f.get("frameColorActive") is not None:
+            lines.append(f"  --focus-frame-color-active: {f['frameColorActive']};")
+        if f.get("glow") is not None:
+            lines.append(f"  --focus-glow: {f['glow']};")
+        if f.get("radius") is not None:
+            lines.append(f"  --focus-radius: {f['radius']};")
+        if f.get("transition") is not None:
+            lines.append(f"  --focus-transition: {f['transition']};")
+
     # 布局自由度（相对值 → 百分比 / em）。
     # 这里**不写任何字面兜底默认值**：默认值的唯一来源是模板 theme.json
     # （build 时 _deep_merge(模板, 工程) 已合并进来），最后一道兜底写在 CSS 的 var(--x, 默认) 里。

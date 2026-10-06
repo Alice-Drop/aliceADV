@@ -214,8 +214,112 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* 静音：整区压暗并锁死交互（值保留，取消静音后原样恢复） */
-.settings-section.is-muted .slider-row {
+/* 静音：整项压暗并锁死交互（值保留，取消静音后原样恢复）。
+ * 被锁的是「别的项」（见 settings.js 的 SPECS.muteAll.mutes），因此类落在字段上而不是分区上。 */
+.settings-field.is-muted {
     opacity: 0.4;
     pointer-events: none;
+}
+
+/* ---------- 控件四：下拉框（动作选择 / 键位方案） ----------
+ * 用原生 <select>：键盘可达、手机上是系统选择器，比自绘下拉更稳。 */
+.sel,
+.keymap__select {
+    align-self: flex-start;
+    max-width: 100%;
+    height: calc(var(--design-h) * 42 / 1080);
+    padding: 0 calc(var(--design-w) * 16 / 1920);
+    border: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.35);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    background: rgba(255, 255, 255, 0.7);
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: var(--color-idle);
+    cursor: pointer;
+}
+.sel:hover, .keymap__select:hover { border-color: var(--color-hover); color: var(--color-hover); }
+.sel:focus-visible, .keymap__select:focus-visible { outline: 2px dashed var(--color-hover); outline-offset: 2px; }
+
+/* ---------- 按键映射区块 ----------
+ * 一行一个动作：动作名 / 推荐方案下拉框 / 当前生效的键位。
+ * 自定义时键位可单独删除，并可「＋ 添加按键」继续捕获下一个。 */
+.keymap { display: flex; flex-direction: column; gap: calc(var(--design-h) * 10 / 1080); }
+.keymap__title {
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    font-weight: 600;
+    color: var(--color-accent);
+    letter-spacing: 0.06em;
+}
+.keymap__list { display: flex; flex-direction: column; }
+.keymap__row {
+    display: grid;
+    grid-template-columns: minmax(0, 30%) minmax(0, 34%) minmax(0, 1fr);
+    align-items: center;
+    gap: calc(var(--design-w) * 14 / 1920);
+    padding: calc(var(--design-h) * 8 / 1080) 0;
+    border-top: calc(var(--design-w) * 1 / 1920) dashed rgba(59, 89, 152, 0.22);
+    border-top-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+.keymap__row:first-child { border-top: none; }
+.keymap__action {
+    font-family: var(--font-interface);
+    font-size: var(--size-interface);
+    color: var(--color-idle);
+    line-height: 1.25;
+}
+.keymap__select { justify-self: stretch; }
+.keymap__keys {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--design-w) * 8 / 1920);
+    min-width: 0;
+}
+.keytag {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--design-w) * 4 / 1920);
+    padding: calc(var(--design-h) * 3 / 1080) calc(var(--design-w) * 12 / 1920);
+    border: calc(var(--design-w) * 1 / 1920) solid rgba(59, 89, 152, 0.35);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    background: rgba(255, 255, 255, 0.85);
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    color: var(--color-accent);
+    white-space: nowrap;
+}
+.keytag__del {
+    border: none;
+    background: transparent;
+    padding: 0 calc(var(--design-w) * 2 / 1920);
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 18 / 1920);
+    line-height: 1;
+    color: var(--color-idle-small);
+    cursor: pointer;
+}
+.keytag__del:hover { color: var(--color-hover); }
+.keymap__empty {
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    color: var(--color-idle-small);
+}
+.keymap__add, .keymap__clear {
+    border: calc(var(--design-w) * 1 / 1920) dashed rgba(59, 89, 152, 0.45);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    background: transparent;
+    padding: calc(var(--design-h) * 4 / 1080) calc(var(--design-w) * 12 / 1920);
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    color: var(--color-accent);
+    cursor: pointer;
+}
+.keymap__add:hover, .keymap__clear:hover { color: var(--color-hover); border-color: var(--color-hover); }
+.keymap__warn {
+    grid-column: 1 / -1;
+    font-family: var(--font-interface);
+    font-size: calc(var(--design-w) * 16 / 1920);
+    line-height: 1.4;
+    color: var(--color-idle-small);
 }

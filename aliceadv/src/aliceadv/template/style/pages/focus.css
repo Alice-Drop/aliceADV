@@ -1,0 +1,32 @@
+/* =========================================================
+ * 手柄焦点框（开始界面 / 菜单页的候选按钮圈选）
+ * 仅在识别到手柄时，由 engine.js 给「当前候选按钮」加 .is-focus。
+ * 比热区 hover 的 3/1920 内描边更粗、更显眼，作为默认样式（非调试态）。
+ * 所有外观都可在 theme.json 的 focus 块里改（--focus-* 变量），
+ * 此处只给「变量没配上」时的兜底默认值。
+ * ========================================================= */
+
+/* 候选框：外圈实线环 + 外发光 + 一圈深色投影，圆角跟随按钮，带过渡。
+ * box-shadow 的 spread 环画在元素边框盒之外，不受元素自身 overflow 影响；
+ * 圆角由同一份 --focus-radius 保证环与按钮形状贴合。
+ * 第三层是写死的深色柔光（不进 --focus-* 变量），只为在浅色背景上把白环托出来，
+ * 深色背景上它几乎不可见，白环本身已足够醒目。 */
+.is-focus {
+    position: relative;
+    z-index: 6;
+    outline: none;
+    box-shadow:
+        0 0 0 var(--focus-frame-width, 6px) var(--focus-frame-color, rgba(255, 255, 255, 0.95)),
+        0 0 var(--focus-glow-size, 20px) var(--focus-glow, rgba(255, 255, 255, 0.5)),
+        0 0 16px rgba(0, 0, 0, 0.5);
+    border-radius: var(--focus-radius, 12px);
+    transition: box-shadow var(--focus-transition, 130ms) ease;
+}
+
+/* 按 A 确认的瞬间（按钮被按下）用更实的白，给一点「选中并已触发」的反馈 */
+.is-focus:active {
+    box-shadow:
+        0 0 0 var(--focus-frame-width, 6px) var(--focus-frame-color-active, rgba(255, 255, 255, 1)),
+        0 0 var(--focus-glow-size, 26px) var(--focus-glow, rgba(255, 255, 255, 0.65)),
+        0 0 18px rgba(0, 0, 0, 0.55);
+}

@@ -22,20 +22,52 @@
 (function (global) {
     "use strict";
 
-    /* ---------- 1. 默认值：单一来源 ---------- */
-    const DEFAULTS = {
-        displayMode:     "window",   // "window" | "fullscreen"
-        rollbackSide:    "left",     // "disable" | "left" | "right"
-        skipUnseen:      false,
-        skipAfterChoice: true,
-        skipTransitions: false,
-        textSpeed:       0.55,
-        autoWait:        0.30,
-        musicVolume:     0.60,
-        soundVolume:     0.70,
-        voiceVolume:     0.80,
-        muteAll:         false
+    /* ---------- 1. 默认值 + 类型规格：单一来源 ----------
+     * SPECS 是设置项的**唯一登记处**：默认值、取值类型、取值范围都在这里。
+     *   类型     含义                                  页面控件（由 theme.json 决定摆哪）
+     *   bool     布尔                                  开关 chip
+     *   unit     0~1 的小数（速度 / 音量）              滑块 slider
+     *   int      整数（毫秒 / 个数）                    带上下限的滑块 range
+     *   enum     枚举值（值域写在 options）             分段按钮 seg
+     *   action   动作 id（值域来自 input.js 的动作表）  下拉框 select
+     *
+     * 设置页**渲染什么、什么顺序**由 theme.json 的 pages.settings.sections 决定（见
+     * docs/样式控制.md §3.3），但一个键是否存在、取值范围如何，只由这张表说了算 ——
+     * 页面配置引用未登记的键会被忽略并告警，避免出现「设置项存在但引擎不认」的空控件。
+     *
+     * mutes：打开这一项时，列出的其它项被压暗并且不可改（当前只有「全部静音」用它）。
+     */
+    const SPECS = {
+        // —— 显示 ——
+        displayMode:     { type: "enum", def: "window", options: ["window", "fullscreen"] },
+        // —— 文本与播放 ——
+        textSpeed:       { type: "unit", def: 0.55 },
+        autoWait:        { type: "unit", def: 0.30 },
+        rollbackSide:    { type: "enum", def: "left", options: ["disable", "left", "right"] },
+        skipUnseen:      { type: "bool", def: false },
+        skipAfterChoice: { type: "bool", def: true },
+        skipTransitions: { type: "bool", def: false },
+        // —— 音量 ——
+        musicVolume:     { type: "unit", def: 0.60 },
+        soundVolume:     { type: "unit", def: 0.70 },
+        voiceVolume:     { type: "unit", def: 0.80 },
+        muteAll:         { type: "bool", def: false, mutes: ["musicVolume", "soundVolume", "voiceVolume"] },
+        // —— 操作：滚轮回看 ——
+        // 开启后，滚轮向上回看已经读过的对话、向下回到当前位置；关闭则滚轮完全不参与剧情。
+        wheelReview:     { type: "bool", def: true },
+        // —— 操作：快捷轮盘 ——
+        radialEnabled:   { type: "bool", def: true },
+        radialHoldMs:    { type: "int",  def: 500, min: 200, max: 2000, step: 50, unit: "ms" },
+        radialUp:        { type: "action", def: "Auto" },
+        radialRight:     { type: "action", def: "QuickSave" },
+        radialDown:      { type: "action", def: "QuickLoad" },
+        radialLeft:      { type: "action", def: "History" },
+        radialCenter:    { type: "action", def: "Cancel" }
     };
+
+    // 默认值表（由 SPECS 派生）：对外仍是「键 → 默认值」的朴素形状，与旧接口兼容。
+    const DEFAULTS = {};
+    for (const k in SPECS) DEFAULTS[k] = SPECS[k].def;
 
     const PREFIX = "aliceadv.settings.";
     const ARM_EVENTS = ["pointerdown", "mousedown", "touchstart", "keydown"];
@@ -45,8 +77,9 @@
     const listeners = [];          // 变更订阅者
 
     /* ---------- 2. 存储层 ---------- */
-    function storageKey() {
-        if (keyCache) return keyCache;
+    /* 存储键前缀 → 命名空间键。设置与按键绑定各用一个前缀，按游戏名分命名空间，
+     * 这样多个作品共用同一台机器时互不干扰（input.js 也走这里，规则只有一处）。 */
+    function storageKeyFor(prefix) {
         let name = "";
         try {
             const t = global.__THEME__
@@ -57,7 +90,12 @@
         // 用 \w 会把「无法校准少女」整串压成一个 "_"，不同作品会撞键。
         const slug = String(name).trim()
             .replace(/[\s\u0000-\u001f\u007f\/:*?"<>|#&=]+/g, "_").slice(0, 64) || "default";
-        keyCache = PREFIX + slug;
+        return String(prefix) + slug;
+    }
+
+    function storageKey() {
+        if (keyCache) return keyCache;
+        keyCache = storageKeyFor(PREFIX);
         return keyCache;
     }
 
@@ -75,24 +113,39 @@
         catch (e) { return false; }   // 存储不可用：仅内存生效
     }
 
-    // 按默认值类型收紧，避免脏数据（手改 localStorage / 旧版本残留）污染运行时
-    function coerce(value, def) {
-        if (typeof def === "boolean") return !!value;
-        if (typeof def === "number") {
-            const n = Number(value);
-            return isFinite(n) ? Math.min(1, Math.max(0, n)) : def;
+    // 按类型规格收紧，避免脏数据（手改 localStorage / 旧版本残留）污染运行时
+    function coerce(value, spec) {
+        if (!spec) return value;
+        switch (spec.type) {
+            case "bool":
+                return !!value;
+            case "unit": {
+                const n = Number(value);
+                return isFinite(n) ? Math.min(1, Math.max(0, n)) : spec.def;
+            }
+            case "int": {
+                const n = Math.round(Number(value));
+                if (!isFinite(n)) return spec.def;
+                const lo = (spec.min != null) ? spec.min : -Infinity;
+                const hi = (spec.max != null) ? spec.max : Infinity;
+                return Math.min(hi, Math.max(lo, n));
+            }
+            case "enum":
+                return (spec.options && spec.options.indexOf(value) !== -1) ? value : spec.def;
+            case "action":
+                return (typeof value === "string" && value) ? value : spec.def;
+            default:
+                return (value === undefined || value === null) ? spec.def : value;
         }
-        if (typeof def === "string") return (typeof value === "string" && value) ? value : def;
-        return def;
     }
 
     function load() {
         if (cache) return cache;
         const stored = readStore();
         cache = {};
-        for (const k in DEFAULTS) {
+        for (const k in SPECS) {
             const v = stored[k];
-            cache[k] = (v === undefined || v === null) ? DEFAULTS[k] : coerce(v, DEFAULTS[k]);
+            cache[k] = (v === undefined || v === null) ? SPECS[k].def : coerce(v, SPECS[k]);
         }
         return cache;
     }
@@ -110,9 +163,9 @@
     }
 
     function set(key, value) {
-        if (!(key in DEFAULTS)) return;              // 未知项不落盘
+        if (!(key in SPECS)) return;                 // 未知项不落盘
         const s = load();
-        const next = coerce(value, DEFAULTS[key]);
+        const next = coerce(value, SPECS[key]);
         if (s[key] === next) return;                 // 同值不写盘、不广播
         s[key] = next;
         writeStore(s);
@@ -285,6 +338,11 @@
         reset: reset,
         onChange: onChange,
         defaults: DEFAULTS,
+        // 类型规格（设置页据此挑选控件、取上下限；也是「哪些键存在」的唯一判据）
+        spec: function (key) { return SPECS[key] || null; },
+        specs: function () { return SPECS; },
+        keys: function () { return Object.keys(SPECS); },
+        storageKeyFor: storageKeyFor,
         // 显示模式
         applyDisplayMode: applyDisplayMode,
         armAutoFullscreen: armAutoFullscreen,

@@ -146,6 +146,77 @@
     "notifyYpos": 68,
     "skipYpos": 15,
 
+    "input": {
+        "_comment": "按键 / 鼠标 / 滚轮 / 手柄的默认映射。写出的是**推荐方案**（presets），不是硬绑：玩家在设置页里可以逐动作改选某个方案或自己按键，改动只存在客户端 localStorage。绑定字符串语法：key:<键名>（键名取 KeyboardEvent.key 归一化，单字符小写，可加 ctrl/alt/shift/meta 前缀）、mouse:left|middle|right|x1|x2、wheel:up|down|left|right、pad:a|b|x|y|lb|rb|lt|rt|back|start|l3|r3|up|down|left|right（也可写数字下标 pad:0）。一个动作可以同时绑定多种设备（键盘 + 鼠标 + 手柄），也可以一个都不绑（可选功能）。default 决定玩家没有做过选择时跟随哪个方案。动作清单见 docs/输入与按键.md。手柄布局（两套方案一致）：A=推进/确认，B=隐藏UI（在菜单页里则是返回——B 同时绑了 Cancel 与 HideUI，靠优先级分层），X=菜单，Y=自动，LB=上一句，十字键四向=快捷轮盘四格的默认动作（上=自动、右=快存、下=快读、左=历史；十字键上下在有选项列表时先归列表导航）。",
+        "default": "primary",
+        "presets": [
+            {
+                "id": "primary",
+                "label": "标准",
+                "bindings": {
+                    "Advance":       ["mouse:left", "key:enter", "key:space", "pad:a"],
+                    "Confirm":       ["key:enter", "key:space", "pad:a"],
+                    "Cancel":        ["key:escape", "pad:b"],
+                    "Rollback":      ["key:pageup", "pad:lb"],
+                    "ScrollBack":    ["wheel:up"],
+                    "ScrollForward": ["wheel:down"],
+                    "History":       ["mouse:middle", "pad:left"],
+                    "Auto":          ["key:a", "pad:y", "pad:up"],
+                    "SkipRead":      ["key:tab"],
+                    "SkipAll":       ["key:shift+tab"],
+                    "FastForward":   ["key:control"],
+                    "HideUI":        ["key:h", "pad:b"],
+                    "OpenMenu":      ["mouse:right", "pad:x", "key:escape"],
+                    "QuickSave":     ["key:f5", "pad:right"],
+                    "QuickLoad":     ["key:f9", "pad:down"],
+                    "MenuUp":        ["key:arrowup", "pad:up"],
+                    "MenuDown":      ["key:arrowdown", "pad:down"],
+                    "NavUp":         ["pad:up"],
+                    "NavDown":       ["pad:down"],
+                    "NavLeft":       ["pad:left"],
+                    "NavRight":      ["pad:right"]
+                }
+            },
+            {
+                "id": "nomouse",
+                "label": "备用",
+                "bindings": {
+                    "Advance":       ["key:enter", "key:space", "pad:a"],
+                    "Confirm":       ["key:enter", "key:space", "pad:a"],
+                    "Cancel":        ["key:escape", "pad:b"],
+                    "Rollback":      ["key:pageup", "pad:lb"],
+                    "ScrollBack":    ["wheel:up"],
+                    "ScrollForward": ["wheel:down"],
+                    "History":       ["mouse:middle", "pad:left"],
+                    "Auto":          ["key:a", "pad:y", "pad:up"],
+                    "SkipRead":      ["key:tab"],
+                    "SkipAll":       ["key:shift+tab"],
+                    "FastForward":   ["key:control"],
+                    "HideUI":        ["key:h", "pad:b"],
+                    "OpenMenu":      ["mouse:right", "key:m", "pad:x", "key:escape"],
+                    "QuickSave":     ["key:f5", "pad:right"],
+                    "QuickLoad":     ["key:f9", "pad:down"],
+                    "MenuUp":        ["key:arrowup", "pad:up"],
+                    "MenuDown":      ["key:arrowdown", "pad:down"],
+                    "NavUp":         ["pad:up"],
+                    "NavDown":       ["pad:down"],
+                    "NavLeft":       ["pad:left"],
+                    "NavRight":      ["pad:right"]
+                }
+            }
+        ]
+    },
+
+    "focus": {
+        "_comment": "手柄方向键 / 左摇杆导航时，圈住当前候选按钮的「焦点框」外观。仅在识别到手柄时显示，作为默认样式（非调试态）。默认是白色实线环 + 一圈柔和白光，配合 focus.css 里写死的深色投影在任意背景上都读得清；所有项均可被工程 theme.json 覆盖（想要强调色环就把 frameColor / frameColorActive / glow 改成 colors.accent 同款）。",
+        "frameWidth": "6px",
+        "frameColor": "rgba(255, 255, 255, 0.95)",
+        "frameColorActive": "rgba(255, 255, 255, 1)",
+        "glow": "rgba(255, 255, 255, 0.5)",
+        "radius": "12px",
+        "transition": "130ms"
+    },
+
     "gameMenu": {
         "_comment": "游戏内菜单页（sidebar 里的各页：保存/读取/设置/章节选择/剧情分支/画廊/关于）的共享外观默认值。backgroundColor = 整页半透明衬底（铺在背景图之上、内容之下，压淡底图）；panelColor = 主内容那一整块面板的底色（略微透明，让底图淡淡透出）；sidebarButtonColor = 侧栏每个按钮各自的底色（默认纯白、完全不透明，让按钮在任意背景图上都读得清）。三个键都支持 rgba()。此处即引擎默认值（构建时与工程 theme.json 深度合并，工程没写就用这里的；写 null 表示不要该层）。单个页面可在 pages.<页>.backgroundColor / panelColor / sidebarButtonColor 里覆盖。",
         "backgroundColor": "rgba(255, 255, 255, 0.4)",
@@ -185,7 +256,91 @@
         "settings": {
             "background": "gui/game_menu.png",
             "title":      "设置",
-            "titleEn":    "Preferences"
+            "titleEn":    "Preferences",
+            "_comment": "sections 决定设置页**渲染哪些项、什么顺序、用什么文案**（不写死任何东西在引擎里）。每项 { key, label, hint?, full?, options?, chipLabel? }：控件形态由该 key 在 settings.js 的 SPECS 里的类型决定（bool→开关、unit→滑块、int→带上下限滑块、enum→分段按钮、action→动作下拉框）。enum 项用 options 给选项文案（不给则直接用取值）。{ \"type\": \"keymap\" } 是按键映射区块。未登记的 key 会被跳过。",
+            "sections": [
+                {
+                    "title": "显示",
+                    "items": [
+                        {
+                            "key": "displayMode",
+                            "label": "显示模式",
+                            "full": true,
+                            "options": [
+                                { "value": "window",     "label": "窗口" },
+                                { "value": "fullscreen", "label": "全屏幕" }
+                            ],
+                            "hint": "全屏幕会在下次启动游戏、你第一次点击画面时自动申请进入；按 ESC 退出全屏会自动切回窗口模式。环境不允许时「全屏幕」不可选。"
+                        }
+                    ]
+                },
+                {
+                    "title": "文本与播放",
+                    "items": [
+                        { "key": "textSpeed",  "label": "文字显示速度" },
+                        { "key": "autoWait",   "label": "自动模式等待时间" },
+                        {
+                            "key": "rollbackSide",
+                            "label": "Rollback Side",
+                            "full": true,
+                            "options": [
+                                { "value": "disable", "label": "Disable" },
+                                { "value": "left",    "label": "Left" },
+                                { "value": "right",   "label": "Right" }
+                            ]
+                        },
+                        { "key": "skipUnseen",      "label": "跳过未读文本", "chipLabel": "Unseen Text" },
+                        { "key": "skipAfterChoice", "label": "选项后继续跳过", "chipLabel": "选项后" },
+                        {
+                            "key": "skipTransitions",
+                            "label": "跳过转场特效",
+                            "chipLabel": "转场特效",
+                            "hint": "保留项：当前快进一律硬切，本项暂不影响播放。"
+                        }
+                    ]
+                },
+                {
+                    "title": "音量",
+                    "items": [
+                        { "key": "musicVolume", "label": "音乐音量" },
+                        { "key": "soundVolume", "label": "音效音量" },
+                        { "key": "voiceVolume", "label": "语音音量" },
+                        { "key": "muteAll", "label": "全部静音", "chipLabel": "Mute All", "full": true,
+                          "hint": "开启后音量条锁定当前值。" }
+                    ]
+                },
+                {
+                    "title": "操作",
+                    "items": [
+                        { "key": "wheelReview", "label": "滚轮回看", "chipLabel": "滚轮回看",
+                          "hint": "开启后：滚轮向上回看已经读过的对话，向下回到当前位置（不会向下滚到下一句）。关闭则滚轮不参与剧情推进。" },
+                        { "key": "radialEnabled", "label": "快捷轮盘", "chipLabel": "快捷轮盘",
+                          "hint": "开启后：任意位置按住超过设定时长会呼出轮盘，拖向某个方向即执行对应功能，松手在原处＝取消。" },
+                        { "key": "radialHoldMs", "label": "轮盘触发时长", "full": true,
+                          "hint": "按住多久呼出轮盘。数值越小越灵敏，越容易误触。" }
+                    ]
+                },
+                {
+                    "title": "轮盘方向",
+                    "items": [
+                        { "key": "radialUp",    "label": "上" },
+                        { "key": "radialRight", "label": "右" },
+                        { "key": "radialDown",  "label": "下" },
+                        { "key": "radialLeft",  "label": "左" },
+                        { "key": "radialCenter","label": "中心（松手＝取消）", "full": true }
+                    ]
+                },
+                {
+                    "title": "按键映射",
+                    "items": [
+                        {
+                            "type": "keymap",
+                            "title": "按键 / 鼠标 / 滚轮 / 手柄",
+                            "hint": "每个动作可跟随一套推荐方案（「标准」= 键鼠 + 手柄；「备用」= 不用鼠标点击推进），或选「自定义」后按下你要的按键。改动只保存在本机浏览器里。"
+                        }
+                    ]
+                }
+            ]
         },
         "chapters": {
             "background": "gui/game_menu.png",
