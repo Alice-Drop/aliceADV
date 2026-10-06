@@ -354,7 +354,7 @@
         },
         "stage": {
             "background": "images/bg/roof.png",
-            "toolbar":    ["back", "history", "skip", "auto", "save", "qsave", "qload", "menu"]
+            "toolbar":    ["back", "history", "skip", "auto", "save", "load", "qsave", "qload", "menu"]
         },
         "gallery": {
             "background": "gui/game_menu.png",

@@ -260,7 +260,16 @@
 
 /* 底部工具栏（快速菜单）——参考 Ren'Py quick_menu：
  * 无背景底（保持画面纯净），白色文字 + 阴影，按钮无分隔符，均匀排列。
- */
+ *
+ * 可读性（2026-10-06 用户报「压在亮背景上看不清」）：
+ * 这一排字**直接落在背景图/立绘上，底色不可控** —— 亮橙、纯白的天空都能遇上。
+ * 只靠「白字 + 一层淡影」在亮底上必然糊掉（原来就是 rgba(0,0,0,.45) 的单层弱阴影）。
+ * 现在叠三层手段，从外到内：
+ *   ① `-webkit-text-stroke` 描一圈**深色边**（比白字更深，与底色无关 → 边界永远清楚）；
+ *   ② `paint-order: stroke fill` 让描边画在填充**之下**，描边不会啃掉字形本身
+ *      （不加它时描边骑在字形中线上，笔画会被削细，中文小字尤其明显）；
+ *   ③ 多层 text-shadow 提供柔和落影，万一不支持 stroke（如极老浏览器）仍有第二重保障。
+ * 描边宽度用设计像素（与整份 CSS 一致），随舞台等比缩放，不会因窗口大小变形。 */
 .toolbar {
     position: absolute;
     left: 0; right: 0; bottom: 0;
@@ -280,7 +289,13 @@
 .toolbar__btn {
     cursor: pointer;
     color: rgba(255, 255, 255, 0.92);
-    text-shadow: 0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 3 / 1080) rgba(0, 0, 0, 0.45);
+    /* ① 深色描边：与底色无关地把字的轮廓勾出来（亮底上是深边、暗底上是深边，都读得出） */
+    -webkit-text-stroke: calc(var(--design-w) * 1.5 / 1920) rgba(0, 0, 0, 0.85);
+    paint-order: stroke fill;   /* 描边在下、填充在上：不削细笔画 */
+    /* ③ 柔和落影（两层的偏移/模糊不同，避免看出生硬的单层影子） */
+    text-shadow:
+        0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 3 / 1080) rgba(0, 0, 0, 0.55),
+        0 calc(var(--design-h) * 3 / 1080) calc(var(--design-h) * 10 / 1080) rgba(0, 0, 0, 0.45);
     transition: color 0.12s ease, text-shadow 0.12s ease;
     background: transparent;
     border: none;
@@ -289,9 +304,14 @@
     padding: calc(var(--design-h) * 4 / 1080) calc(var(--design-w) * 8 / 1920);
     pointer-events: auto;
 }
+/* hover：白字提到纯白，并把描边加深一档 —— 单靠「更白」在亮底上是没有效果的，
+ * 必须同时加强描边/阴影（与 .about-meta__link:hover 同一个道理）。 */
 .toolbar__btn:hover {
     color: #fff;
-    text-shadow: 0 0 calc(var(--design-w) * 8 / 1920) rgba(255, 255, 255, 0.55);
+    -webkit-text-stroke-color: rgba(0, 0, 0, 0.95);
+    text-shadow:
+        0 calc(var(--design-h) * 1 / 1080) calc(var(--design-h) * 3 / 1080) rgba(0, 0, 0, 0.7),
+        0 calc(var(--design-h) * 3 / 1080) calc(var(--design-h) * 12 / 1080) rgba(0, 0, 0, 0.55);
 }
 .toolbar__btn.is-active { color: #8ec5ff; }
 .toolbar__sep { display: none; }

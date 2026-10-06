@@ -1176,8 +1176,11 @@
 
         // 工具栏（顺序来自 theme.json 的 stage.toolbar）
         const tb = el("div", { class: "toolbar" });
+        // ⚠️ 这份兜底列表必须与模板 theme.json 的 pages.stage.toolbar **逐项一致**：
+        //    数组在 deep merge 里是「整替」，工程只写 pages.stage.background 也会用自己的整份列表，
+        //    两处一旦不同步，「改了没反应」会很难查（build 时看不见任何报错）。
         const order = (cfg.toolbar && cfg.toolbar.length) ? cfg.toolbar
-                    : ["back", "history", "skip", "auto", "save", "qsave", "qload", "menu"];
+                    : ["back", "history", "skip", "auto", "save", "load", "qsave", "qload", "menu"];
         order.forEach(key => {
             const def = NAV[key] || {};
             tb.appendChild(el("button", {

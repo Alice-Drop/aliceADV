@@ -697,6 +697,64 @@ def test_notify_and_skip_are_wired():
           "模板 theme.json 的 pages.save 不再声明 autoSlots")
 
 
+def test_toolbar_buttons_wired():
+    """舞台工具栏：默认列表在**三处**必须逐项一致，且每个键都有「文案 + 动作」两份映射。
+
+    2026-10-06 用户报「stage 菜单里忘记放读取按钮」。根因不是某一处写错，而是
+    **同一个列表散在三处**（模板 theme.json / theme.js 兜底数组 / 工程 theme.json），
+    三处各自演化，`load` 只在 `TOOLBAR_LABELS` 与 `TOOL_ACTIONS` 里备好了，
+    三个列表却都没把它列进去 —— 按钮于是既不渲染也点不到，且 build 全程不报错。
+    加上「数组在 deep merge 里整替」：工程只写 pages.stage.background 也会用自己的
+    整份列表盖掉模板默认，于是**只改模板等于没改**。
+
+    这里锁住：① 三处列表逐项一致；② 每个键在 TOOLBAR_LABELS 与 TOOL_ACTIONS 里都有映射
+    （缺一个 = 点了没反应或跳错页）；③ 默认列表必须含 load（它曾长期缺席）。
+    动态部分（真点击 load 能打开 page_load）由 assets/verify_toolbar_load_readable.js 覆盖。
+    """
+    print("[12] 舞台工具栏：三处列表一致 + 每个键都有文案与动作映射")
+    import re as _re
+
+    theme = json.loads(read(THEME_JSON))
+    tpl = theme.get("pages", {}).get("stage", {}).get("toolbar") or []
+    check(bool(tpl), "模板 theme.json 的 pages.stage.toolbar 非空")
+
+    js = read(THEME_JS)
+    js_code = strip_comments(js)
+    # theme.js 兜底数组：形如 ["back", "history", ... ]
+    m = _re.search(r'cfg\.toolbar && cfg\.toolbar\.length\)\s*\?\s*cfg\.toolbar\s*:\s*\[([^\]]*)\]', js_code, _re.S)
+    check(m is not None, "theme.js 里能定位到 buildStagePage 的工具栏兜底数组")
+    fb = _re.findall(r'"([^"]+)"', m.group(1)) if m else []
+    check(fb == tpl,
+          "theme.js 兜底数组与模板 theme.json 逐项一致（改一处必须三处同步）"
+          "｜theme.js=%s / theme.json=%s" % (fb, tpl))
+
+    # 三份映射：TOOLBAR_LABELS（文案）/ TOOL_ACTIONS（动作）/ NAV（data-page）
+    labels = _re.search(r"const TOOLBAR_LABELS = \{([\s\S]*?)\n    \};", js_code)
+    acts = _re.search(r"const TOOL_ACTIONS = \{([\s\S]*?)\};", read(os.path.join(STYLE, "engine.js")))
+    check(labels is not None and acts is not None, "能定位到 TOOLBAR_LABELS 与 TOOL_ACTIONS")
+    label_keys = _re.findall(r"(\w+):", labels.group(1)) if labels else []
+    act_keys = _re.findall(r"(\w+):", acts.group(1)) if acts else []
+    for k in tpl:
+        check(k in label_keys, "键 %s 有文案（TOOLBAR_LABELS）" % k)
+        check(k in act_keys, "键 %s 有动作（TOOL_ACTIONS，否则点了没反应）" % k)
+
+    check("load" in tpl, "默认列表含 load（读取）——它曾长期缺席导致按钮不显示")
+    # 顺序：读取紧跟保存（读档与存档成对），避免以后又被排到末尾
+    if "load" in tpl and "save" in tpl:
+        check(tpl.index("load") == tpl.index("save") + 1, "load 紧跟在 save 之后（读档与存档成对）")
+
+    # 工具栏文字压在背景图上，底色不可控 → 描边 + paint-order + 多层阴影缺一不可
+    css = strip_css_comments(read(os.path.join(STYLE, "pages", "stage.css")))
+    btn = css_rule(css, ".toolbar__btn")
+    check("text-stroke" in btn, ".toolbar__btn 有深色描边（亮底上白字否则隐形）")
+    check("paint-order" in btn, ".toolbar__btn 写 paint-order: stroke（描边不削细笔画）")
+    shadows = btn.count("text-shadow") + len(_re.findall(r"rgba\([^)]*0\.[0-9]+\)", btn))
+    check(shadows >= 2, ".toolbar__btn 的落影/描边是多层的（老浏览器不支持 stroke 时仍有兜底）")
+    hover = css_rule(css, ".toolbar__btn:hover")
+    check("text-stroke" in hover,
+          "hover 同时加深描边（单靠「字更白」在亮底上没有视觉变化）")
+
+
 def main():
     test_builder_never_emits_camelcase_vars()
     test_no_inert_palette_key()
@@ -709,6 +767,7 @@ def main():
     test_about_text_single_source()
     test_gui2theme_keys_are_all_consumed()
     test_notify_and_skip_are_wired()
+    test_toolbar_buttons_wired()
     print()
     if _failures:
         print("FAILED (%d):" % len(_failures))
