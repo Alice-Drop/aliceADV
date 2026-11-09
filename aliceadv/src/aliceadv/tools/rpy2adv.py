@@ -5,12 +5,13 @@
 # 解析 Ren'Py web 构建里的 game/script.rpy（可读源码），生成 aliceADV 的：
 #   - characters.json   角色档案（含 per-character 对话框、表情立绘、名字颜色）
 #   - chapters.json     剧本目录（单章即可，含 playOrder）
-#   - ch1.json          章节剧本（段 segments，指令序列）
+#   - ch1.json          章节剧本（顶层 positions 站位表 + 段 segments，指令序列）
 #
 # 支持的 Ren'Py 语法（本工具覆盖范围，足以搬运常见线性/轻分支 VN）：
 #   define X = Character('名', color="#..", image="..", window_background="images/.._tb.png")
 #   label start:  ...  return
 #   scene NAME [with fade]                  -> scene { src, transition }   (bg 为兼容别名)
+#   transform NAME: xalign/yalign/...            -> ch1.json 顶层 positions 的同名站位定义
 #   show NAME [at left|center|right] [with fade]   -> show { char|src, sprite?, at, transition }
 #   hide NAME [with fade]                   -> hide { char|src, transition }
 #   pause                                   -> pause { }        (等玩家点击，不显示对话框)
@@ -481,6 +482,36 @@ def parse_body(body_lines, vars=None):
     return cmds
 
 
+# 章级 positions 允许的位置属性（与 script.js / builder.py 的 POSITION_FIELDS 同源）。
+POSITION_PROPS = ("left", "top", "right", "bottom",
+                  "xpos", "ypos", "xanchor", "yanchor", "xalign", "yalign")
+
+
+def parse_transforms(raw_lines):
+    """扫描 Ren'Py 顶层 transform 块，收集位置属性 → 章级 positions。
+
+    原版在 script.rpy 开头重定义 left / right 的 xalign，正是「靠紧紧」的来源。
+    内置 center 由运行时提供，这里不生成；transform 块本身不产出剧本指令。
+    """
+    out = {}
+    cur = None
+    for ln in raw_lines:
+        m = re.match(r"^transform\s+(\w+)\s*:\s*$", ln)
+        if m:
+            cur = m.group(1)
+            out[cur] = {}
+            continue
+        if cur is None:
+            continue
+        if ln.strip() and not ln[0].isspace():
+            cur = None
+            continue
+        m = re.match(r"^\s+(\w+)\s+(-?\d+(?:\.\d+)?)\b", strip_comment(ln))
+        if m and m.group(1) in POSITION_PROPS:
+            out[cur][m.group(1)] = float(m.group(2))
+    return {k: v for k, v in out.items() if v}
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -528,6 +559,7 @@ def main(argv=None):
         body.append(strip_comment(ln))
 
     cmds = parse_body(body, vars)
+    positions = parse_transforms(lines)
 
     # 组装 characters.json
     characters = {}
@@ -553,15 +585,15 @@ def main(argv=None):
         "gallery": []
     }
 
-    # ch1.json
+    # ch1.json（positions 只写原版重定义过的站位，内置 center 交给运行时）
     ch1 = {
         "id": "ch1",
         "title": "脱出轨道的女孩们",
-        "start": "start",
-        "segments": {
-            "start": cmds
-        }
+        "start": "start"
     }
+    if positions:
+        ch1["positions"] = positions
+    ch1["segments"] = {"start": cmds}
     if vars:
         ch1["vars"] = vars
 
@@ -576,6 +608,7 @@ def main(argv=None):
     print(f"✓ 转换完成")
     print(f"  角色: {len(characters)} 个（含表情立绘: {sum(1 for c in characters.values() if c.get('sprites'))} 个）")
     print(f"  指令: {len(cmds)} 条")
+    print(f"  站位: {len(positions)} 个（{', '.join(sorted(positions)) or '无，使用内置三槽'}）")
     print(f"  输出: {out_dir}/{{characters,chapters,ch1}}.json")
     return 0
 

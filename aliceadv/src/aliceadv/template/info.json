@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "autoSave": true,
   "quickSave": true,
+  "textCps": 40,
   "preload": {
     "boot": "title",
     "runtime": ["page", "predict"],

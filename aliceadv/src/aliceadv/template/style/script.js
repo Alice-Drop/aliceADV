@@ -38,14 +38,30 @@
  *   两层次：脚本根 "chapters":{ 章名:{ start?, segments } } 为宏观组织；运行时扁平化为全局段名。
  *
  * 历史记录：say/narrate（含 nvl）播放时写入 history；exit() 退出播放时清空。
+ *
+ * 文字显示速度：作者基准值来自 info.json 的 textCps（字/秒，0 = 整行一次出现），
+ * 设置页 textSpeed 是玩家侧的相对倍率；两者合成出本句每字的间隔，见 typeIntervalMs()。
  * ========================================================= */
 
 (function (global) {
     "use strict";
 
     const CHAR_PATH = "story/characters.json";
-    const TYPE_SPEED = 26;   // ms/字
+    // 模板直开（没有 info.json）时的最后兜底；正式产物一律由模板 info.json 的 textCps 提供，
+    // 两处数值由 aliceadv/tests/test_text_display.py 守着一致。
+    const TEXT_CPS_FALLBACK = 40;
     const TITLE_CARD_MS = 2200;
+
+    /* Ren'Py 内置 left / center / right 的等价定义：xalign 同时是 xpos 与 xanchor，
+     * yalign 1.0 = 贴底。章级 story/chX.json 的 positions 只覆盖要改的键；
+     * center 同时是 at 缺省、快照重建与同拍折叠判等的兜底，不能删除。 */
+    const DEFAULT_POSITIONS = {
+        left:   { xalign: 0.0, yalign: 1.0 },
+        center: { xalign: 0.5, yalign: 1.0 },
+        right:  { xalign: 1.0, yalign: 1.0 }
+    };
+    const POSITION_FIELDS = ["left", "top", "right", "bottom",
+        "xpos", "ypos", "xanchor", "yanchor", "xalign", "yalign"];
 
     const state = {
         script: null,          // 当前章节剧本
@@ -63,6 +79,7 @@
         waiting: false,        // 等待用户点击
         deciding: false,       // 选项展示中
         typing: null,          // 打字机 timer（活跃打字中）
+        typeMs: 0,             // 本句每字间隔（ms）；0 = 整行一次出现
         typeParts: null,       // 解析后的带停顿分段：[{text, wait}]
         typeSi: 0,              // 当前段下标
         typeCi: 0,              // 当前段已打字字符数
@@ -147,6 +164,119 @@
     }
     function clearNode(n) { while (n && n.firstChild) n.removeChild(n.firstChild); }
     function stageRoot() { return document.getElementById("page_stage"); }
+
+    /* ---------- 站位：章级 positions → 布局结果 → 落地 ----------
+     * 站位数据来自当前章节 JSON 的顶层 positions，由演出控制系统在运行时解读；
+     * 构建期只做只读校验（builder.validate_positions），不产出 CSS。
+     * 分层目的：换渲染后端（DOM / canvas）时只需替换 applySpriteLayout，
+     * 数据格式、resolvePosition 与 show/hide/折叠/快照流程都不变。
+     *
+     * 十个字段分两组：
+     *   CSS 组     left / top / right / bottom —— 相对设计画布，锚点固定在边角
+     *   Ren'Py 组  xpos / ypos / xanchor / yanchor / xalign / yalign
+     *              xalign v ≡ xpos v + xanchor v；anchor 相对图片自身
+     * 因此 left/top 与 translate 的百分比参照物不同，不能合并成一次 calc。 */
+    function positionTable() {
+        const own = (state.script && state.script.positions) || {};
+        return Object.assign({}, DEFAULT_POSITIONS, own);
+    }
+
+    // 设计画布尺寸只用于「大于 1 的数字 = 设计像素」的换算，取自 theme.json 写出的
+    // --design-w / --design-h，不写死 1920×1080。取不到时按设计像素原样输出 px。
+    function designSize() {
+        const cs = global.getComputedStyle(document.documentElement);
+        const w = parseFloat(cs.getPropertyValue("--design-w"));
+        const h = parseFloat(cs.getPropertyValue("--design-h"));
+        return { w: isFinite(w) && w > 0 ? w : 0, h: isFinite(h) && h > 0 ? h : 0 };
+    }
+
+    // 0~1 → 相对画布的百分比；>1 → 设计像素按画布尺寸折算成比例；字符串原样透传。
+    function canvasLength(v, base) {
+        if (typeof v === "number" && isFinite(v)) {
+            if (v >= 0 && v <= 1) return (v * 100).toFixed(4) + "%";
+            return base > 0 ? (v / base * 100).toFixed(4) + "%" : v + "px";
+        }
+        return String(v);
+    }
+
+    // anchor 相对图片自身，不能用画布尺寸折算。
+    function anchorLength(v) {
+        if (typeof v === "number" && isFinite(v)) {
+            if (v >= 0 && v <= 1) return (v * 100).toFixed(4) + "%";
+            return v + "px";
+        }
+        return String(v);
+    }
+
+    function resolvePosition(spec, ctx) {
+        const size = ctx || designSize();
+        const out = { left: null, top: null, right: null, bottom: null, tx: "0%", ty: "0%" };
+        const warn = m => console.warn("[aliceADV] 站位 " + m);
+        Object.keys(spec).forEach(k => {
+            if (k.charAt(0) !== "_" && POSITION_FIELDS.indexOf(k) === -1)
+                warn("字段未识别: " + k);
+        });
+
+        // 水平：Ren'Py 组优先；xalign 是简写，显式 xpos / xanchor 逐项覆盖它。
+        let xp = spec.xalign, xa = spec.xalign;
+        if (spec.xpos != null) xp = spec.xpos;
+        if (spec.xanchor != null) xa = spec.xanchor;
+        if (xp != null) {
+            if (spec.left != null || spec.right != null) warn("xpos/xalign 与 left/right 同时给出，按 xpos/xalign 处理");
+            out.left = canvasLength(xp, size.w);
+            if (xa != null) out.tx = "-" + anchorLength(xa);
+        } else if (spec.left != null) {
+            if (spec.right != null) warn("left 与 right 同时给出，按 left 处理");
+            out.left = canvasLength(spec.left, size.w);
+        } else if (spec.right != null) {
+            out.right = canvasLength(spec.right, size.w);
+        } else {
+            out.left = "50%"; out.tx = "-50%";      // 缺省 xalign 0.5
+        }
+
+        // 垂直：同上，缺省 yalign 1.0（贴底）。
+        let yp = spec.yalign, ya = spec.yalign;
+        if (spec.ypos != null) yp = spec.ypos;
+        if (spec.yanchor != null) ya = spec.yanchor;
+        if (yp != null) {
+            if (spec.top != null || spec.bottom != null) warn("ypos/yalign 与 top/bottom 同时给出，按 ypos/yalign 处理");
+            out.top = canvasLength(yp, size.h);
+            if (ya != null) out.ty = "-" + anchorLength(ya);
+        } else if (spec.top != null) {
+            if (spec.bottom != null) warn("top 与 bottom 同时给出，按 top 处理");
+            out.top = canvasLength(spec.top, size.h);
+        } else if (spec.bottom != null) {
+            out.bottom = canvasLength(spec.bottom, size.h);
+        } else {
+            out.top = "100%"; out.ty = "-100%";     // 缺省 yalign 1.0
+        }
+        return out;
+    }
+
+    function resolveAt(at) {
+        const name = (at == null || at === "") ? "center" : String(at);
+        const table = positionTable();
+        let spec = table[name];
+        if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+            console.warn("[aliceADV] 未定义的站位: " + name + "，回落到 center");
+            spec = table.center || DEFAULT_POSITIONS.center;
+        }
+        return resolvePosition(spec);
+    }
+
+    /* 落地层：DOM 后端写节点内联样式。transform 走 CSS 变量，因为 CSS 动画的
+     * 优先级高于 inline style，keyframes 里也读同一组变量才不会在播放时丢掉位置。
+     * canvas 后端替换本函数即可，上面的数据与计算层不动。 */
+    function applySpriteLayout(node, at) {
+        if (!node) return;
+        const p = resolveAt(at);
+        ["left", "top", "right", "bottom"].forEach(k => {
+            node.style[k] = p[k] != null ? p[k] : "auto";
+        });
+        node.style.setProperty("--char-tx", p.tx);
+        node.style.setProperty("--char-ty", p.ty);
+        node.setAttribute("data-at", (at == null || at === "") ? "center" : String(at));
+    }
 
     /* ---------- 安全表达式求值器（条件跳转 / 行内 {if} / 单指令 if） ----------
        不使用 eval；仅支持 变量 / 数字 / 字符串 / 比较(== != >= <= > <) /
@@ -729,6 +859,7 @@
             + (c.anim ? " anim-" + c.anim : " anim-fade");
         node.setAttribute("data-char", id);
         node.draggable = false;
+        applySpriteLayout(node, c.at);
         const layer = stageRoot().querySelector(".stage-chars");
         if (layer) layer.appendChild(node);
         state.nodeMap[id] = node;
@@ -749,6 +880,7 @@
         } else {
             node.className = "stage-char at-" + (c.at || "center");
         }
+        applySpriteLayout(node, c.at);
         if (c.transition === "fade") {
             node.style.opacity = "0";
             requestAnimationFrame(() => { node.style.opacity = "1"; });
@@ -930,6 +1062,7 @@
                 clearInterval(state.typing);
                 if (state.typePauseTimer) { clearTimeout(state.typePauseTimer); state.typePauseTimer = null; }
                 state.typing = null;
+                state.typeMs = 0;
                 state.awaitClick = false;
                 state.typePrefix = "";
                 textEl.textContent = text;
@@ -974,11 +1107,21 @@
         state.typeSi = 0;
         state.typeCi = 0;
         node.dataset.full = (prefix || "") + text.replace(WAIT_RE, "");
+        state.typeMs = typeIntervalMs();
+        if (!state.typeMs) {
+            // 整行一次出现：不启动定时器。句中 {w}/{w=N} 停顿属于打字过程，
+            // 此刻一并略过；dataset.full 仍写全文，append 续说与回溯才拿得到完整前缀。
+            node.textContent = node.dataset.full;
+            state.typing = null;
+            return;
+        }
         typeSeg(node);
     }
     function typeSeg(node) {
         if (state.typeSi >= state.typeParts.length) { state.typing = null; return; }
         const seg = state.typeParts[state.typeSi];
+        const ms = state.typeMs || typeIntervalMs();   // 句中停顿后续打沿用本句速度
+        if (!ms) { node.textContent = node.dataset.full; state.typing = null; return; }
         state.typing = setInterval(() => {
             state.typeCi++;
             const shown = state.typePrefix
@@ -990,7 +1133,7 @@
                 state.typing = null;
                 onSegDone(node, seg);
             }
-        }, TYPE_SPEED);
+        }, ms);
     }
     function onSegDone(node, seg) {
         if (seg.wait === "click") { state.awaitClick = true; return; }      // 等点击续打下一截
@@ -1160,6 +1303,7 @@
             node.className = "stage-char at-" + (s.chars[id].at || "center");
             node.setAttribute("data-char", id);
             node.draggable = false;
+            applySpriteLayout(node, s.chars[id].at);
             if (src) node.src = src;
             root.querySelector(".stage-chars").appendChild(node);
             state.nodeMap[id] = node;
@@ -1337,6 +1481,28 @@
         const info = (global.__THEME__ && global.__THEME__.info) || {};
         const v = info[name];
         return (v === undefined || v === null) ? def : !!v;
+    }
+    function cfgNum(name, def) {
+        const info = (global.__THEME__ && global.__THEME__.info) || {};
+        const v = info[name];
+        const n = (typeof v === "number") ? v : parseFloat(v);
+        return isFinite(n) ? n : def;
+    }
+
+    /* 本句每字间隔（ms）。返回 0 表示整行一次出现，不启动打字机。
+     *
+     * 作者基准 = info.json 的 textCps（字/秒；0 = 整行一次出现，对齐 Ren'Py 的
+     * preferences.text_cps）。玩家设置 textSpeed 是相对倍率（0~1）：0.5 为作者设定
+     * 速度、0 为 0.25 倍、1 为整行一次出现。textCps 为 0 时作者已锁定整行显示，
+     * 玩家倍率不改变这一决定。两个真值源各管一层，不互相回退。 */
+    function typeIntervalMs() {
+        const base = cfgNum("textCps", TEXT_CPS_FALLBACK);
+        if (!(base > 0)) return 0;
+        const S = global.AliceADVSettings;
+        const raw = S ? Number(S.get("textSpeed")) : 0.5;
+        const t = isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.5;
+        if (t >= 1) return 0;
+        return 1000 / Math.max(1, base * (0.25 + 1.5 * t));
     }
     function autoSaveEnabled()  { return cfgBool("autoSave", true); }
     function quickSaveEnabled() { return cfgBool("quickSave", true); }

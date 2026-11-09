@@ -219,7 +219,7 @@ def build_panel_css(theme):
 
     由 theme.json 的 panel 控制：
       - panel.side:   "left" / "right" / "center"（默认 "right"）
-      - panel.width:  窗口宽（px，相对 info.json 的 screen.designWidth 转换为比例）
+      - panel.width:  窗口宽（px，相对 theme.json 的 screen.designWidth 转换为比例）
       - panel.height: 窗口高（px，相对 screen.designHeight；可选，缺省为整屏高）
 
     构建时把 px 转换为相对于设计画布的比例（与 定义.md「按钮以 px 为单位 → 比例」一致），
@@ -322,6 +322,51 @@ def collect_scripts(project_dir):
             with open(path, "r", encoding="utf-8") as f:
                 out["story/" + name] = json.load(f)
     return out
+
+
+# 站位对象允许的字段：CSS 组 + Ren'Py 组（与 script.js 的 POSITION_FIELDS 同源）。
+POSITION_FIELDS = ("left", "top", "right", "bottom",
+                   "xpos", "ypos", "xanchor", "yanchor", "xalign", "yalign")
+
+
+def validate_positions(scripts):
+    """章节 JSON 顶层 positions 的只读校验。
+
+    站位由运行时演出控制系统解读（template/style/script.js 的 resolvePosition），
+    构建期不产出 CSS、不改写剧本内容；这里只拦住会让作者困惑的写法。
+    """
+    warns = []
+    for path, script in sorted((scripts or {}).items()):
+        if not isinstance(script, dict):
+            continue
+        positions = script.get("positions")
+        if positions is None:
+            continue
+        if not isinstance(positions, dict):
+            warns.append("%s: positions 必须是对象" % path)
+            continue
+        for name, spec in positions.items():
+            if str(name).startswith("_"):
+                continue
+            if not isinstance(spec, dict):
+                warns.append("%s: 站位 %s 必须是对象（不支持数字简写）" % (path, name))
+                continue
+            for k, v in spec.items():
+                if str(k).startswith("_"):
+                    continue
+                if k not in POSITION_FIELDS:
+                    warns.append("%s: 站位 %s 含未识别字段 %s" % (path, name, k))
+                elif isinstance(v, bool) or not isinstance(v, (int, float, str)):
+                    warns.append("%s: 站位 %s.%s 必须是数字或字符串" % (path, name, k))
+            if ("xalign" in spec or "xpos" in spec) and ("left" in spec or "right" in spec):
+                warns.append("%s: 站位 %s 混用 xpos/xalign 与 left/right，运行时按前者处理" % (path, name))
+            if "left" in spec and "right" in spec:
+                warns.append("%s: 站位 %s 同时给出 left / right，运行时按 left 处理" % (path, name))
+            if ("yalign" in spec or "ypos" in spec) and ("top" in spec or "bottom" in spec):
+                warns.append("%s: 站位 %s 混用 ypos/yalign 与 top/bottom，运行时按前者处理" % (path, name))
+            if "top" in spec and "bottom" in spec:
+                warns.append("%s: 站位 %s 同时给出 top / bottom，运行时按 top 处理" % (path, name))
+    return warns
 
 
 """构建资源清单（window.__ASSETS__）时判定类型用的扩展名，与 preload.js 的 AUDIO_EXT 一致。"""
@@ -545,6 +590,8 @@ def build_project(project_dir):
 
     # 4. 收集剧本（章节 + 角色档案）
     scripts = collect_scripts(project_dir)
+    for _w in validate_positions(scripts):
+        print("  提示: " + _w)
 
     # 5. 组装 <工程>/dist/web/ = 引擎运行时(取自模板) + 工程内容(取自工程目录)
     #    工程根目录只保存内容（theme.json / story / gui / images / audio ...），

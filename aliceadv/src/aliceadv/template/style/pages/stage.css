@@ -32,47 +32,49 @@
 #page_stage .stage-fade.is-on { opacity: 1; }
 
 /* 立绘层：剧本 show/sprite/hide 指令操作。
- * 站位槽 at-left/at-center/at-right（at 未指定时居中），语义对齐 Ren'Py 的
- * left/center/right 变换：xalign 0.0 / 0.5 / 1.0 且 yalign 1.0（贴底）。
+ * 站位名（at）由演出控制系统在运行时查表解析：内置 left/center/right 对齐
+ * Ren'Py 的 xalign 0.0 / 0.5 / 1.0 且 yalign 1.0（贴底），章节 JSON 顶层
+ * positions 可覆盖或新增名字。具体位置不写在 CSS 里，见 script.js。
  *
  * 尺寸策略（Ren'Py 兼容）：立绘用 <img> 渲染，默认 height:auto 即「按图片原始
  * 像素显示」。因为 #stage 本身是 1920×1080 的 CSS 像素盒（整体由 transform 缩放），
  * 所以按设计分辨率作图的立绘/整屏图会与 Ren'Py 完全一致（全屏图铺满、半身像占其真实比例）。
- * 若工程希望统一缩放，可在 theme.json 的 layout.sprite 里给 height/bottom 相对值。 */
+ * 垂直定位由站位的 yalign 接管；layout.sprite.bottom 是旧版兜底，运行时写入的
+ * bottom:auto 会覆盖它。若工程希望统一缩放，可在 layout.sprite.height 里给相对值。 */
 .stage-chars {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
 }
+/* 站位由演出控制系统在运行时写入节点内联样式（script.js applySpriteLayout）。
+ * 本文件不定义 left/center/right 的具体位置，只提供 transform 的读取口：
+ * --char-tx / --char-ty 是 xanchor / yanchor 的负偏移，百分比相对图片自身。 */
 .stage-char {
     position: absolute;
     bottom: var(--sprite-bottom, 0%);
     height: var(--sprite-height, auto);
     width: auto;
     max-width: none;
-    transform: translateX(var(--char-tx, 0));
+    transform: translate(var(--char-tx, 0), var(--char-ty, 0));
     transition: opacity 0.4s ease;
 }
-.stage-char.at-left   { left: 0;   --char-tx: 0; }
-.stage-char.at-center { left: 50%; --char-tx: -50%; }
-.stage-char.at-right  { right: 0;  --char-tx: 0; }
 
-/* 立绘出现/动作动画（transform 里保留站位偏移量 --char-tx） */
+/* 立绘出现/动作动画（transform 里保留站位偏移量 --char-tx / --char-ty） */
 @keyframes char-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes char-bounce {
-    0%   { transform: translateX(var(--char-tx, 0)) translateY(0); }
-    35%  { transform: translateX(var(--char-tx, 0)) translateY(-3%); }
-    60%  { transform: translateX(var(--char-tx, 0)) translateY(0); }
-    80%  { transform: translateX(var(--char-tx, 0)) translateY(-1%); }
-    100% { transform: translateX(var(--char-tx, 0)) translateY(0); }
+    0%   { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(0); }
+    35%  { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(-3%); }
+    60%  { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(0); }
+    80%  { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(-1%); }
+    100% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(0); }
 }
 @keyframes char-shake {
-    0%, 100% { transform: translateX(var(--char-tx, 0)) translateY(0); }
-    20% { transform: translateX(var(--char-tx, 0)) translateX(-2%); }
-    40% { transform: translateX(var(--char-tx, 0)) translateX(2%); }
-    60% { transform: translateX(var(--char-tx, 0)) translateX(-1.5%); }
-    80% { transform: translateX(var(--char-tx, 0)) translateX(1.5%); }
+    0%, 100% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateY(0); }
+    20% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateX(-2%); }
+    40% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateX(2%); }
+    60% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateX(-1.5%); }
+    80% { transform: translate(var(--char-tx, 0), var(--char-ty, 0)) translateX(1.5%); }
 }
 .stage-char.anim-fade  { animation: char-fade-in 0.45s ease both; }
 .stage-char.anim-bounce { animation: char-bounce 0.55s ease both; }

@@ -41,7 +41,9 @@
         // —— 显示 ——
         displayMode:     { type: "enum", def: "window", options: ["window", "fullscreen"] },
         // —— 文本与播放 ——
-        textSpeed:       { type: "unit", def: 0.55 },
+        // textSpeed 是相对倍率：作者基准速度来自 info.json 的 textCps，
+        // 0.5 = 作者设定速度，1 = 整行一次出现。消费点在 script.js 的 typeIntervalMs()。
+        textSpeed:       { type: "unit", def: 0.5 },
         autoWait:        { type: "unit", def: 0.30 },
         rollbackSide:    { type: "enum", def: "left", options: ["disable", "left", "right"] },
         skipUnseen:      { type: "bool", def: false },

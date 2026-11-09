@@ -277,7 +277,7 @@
                 {
                     "title": "文本与播放",
                     "items": [
-                        { "key": "textSpeed",  "label": "文字显示速度" },
+                        { "key": "textSpeed",  "label": "文字显示速度", "hint": "相对作者在 info.json 设定的文字速度：50% 为原速，拉到最右为整行一次出现。作者设为整行显示时本项不改变画面。" },
                         { "key": "autoWait",   "label": "自动模式等待时间" },
                         {
                             "key": "rollbackSide",
